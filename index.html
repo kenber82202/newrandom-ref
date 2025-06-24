@@ -35,6 +35,7 @@
 <button id="forwardBtn" disabled>&gt;</button>
 
 <script>
+document.addEventListener("DOMContentLoaded", () => {
   const txtUrl = 'https://f003.backblazeb2.com/file/links-ref/friendly_urls.txt';
   const imgElement = document.getElementById('mainImage');
   const backBtn = document.getElementById('backBtn');
@@ -80,7 +81,9 @@
   });
 
   loadLinks();
+});
 </script>
+
 
 </body>
 </html>
