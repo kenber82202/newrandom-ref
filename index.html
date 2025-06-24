@@ -135,7 +135,7 @@
   });
 
   // CHANGED FETCH URL HERE
-  fetch('https://corsproxy.io/?https://f003.backblazeb2.com/file/links-ref/friendly_urls.txt')
+  fetch('https://pub-1f21a4f3864f4dfa96988066b7c3a4d1.r2.dev/friendly_urls.txt')
     .then(response => response.text())
     .then(text => {
       links = text.trim().split('\n').filter(Boolean);
