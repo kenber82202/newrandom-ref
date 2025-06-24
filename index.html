@@ -1,86 +1,86 @@
-<script>
-  let links = [];
-  let currentIndex = -1;
-  let historyStack = [];
-  let forwardStack = [];
-  const maxHistory = 3;
-  const maxPreload = 3;
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Image Viewer</title>
+  <style>
+    body {
+      margin: 0; padding: 0;
+      background: #000; color: #fff;
+      font-family: sans-serif;
+      display: flex; justify-content: center; align-items: center;
+      height: 100vh; overflow: hidden;
+    }
+    img {
+      max-width: 90vw; max-height: 90vh;
+      border: 3px solid #fff; border-radius: 8px;
+    }
+    button {
+      position: fixed; bottom: 20px; font-size: 3em;
+      padding: 0.1em 0.3em; cursor: pointer;
+      border-radius: 5px; border: none;
+      background: rgba(30,30,30,0.8); color: #fff;
+      z-index: 1000;
+    }
+    button:disabled { opacity: 0.3; cursor: default; }
+    #backBtn { left: 20px; }
+    #forwardBtn { right: 20px; }
+  </style>
+</head>
+<body>
 
+<img id="mainImage" src="" alt="Loading..." />
+<button id="backBtn" disabled>&lt;</button>
+<button id="forwardBtn" disabled>&gt;</button>
+
+<script>
+  const txtUrl = 'https://f003.backblazeb2.com/file/links-ref/friendly_urls.txt';
   const imgElement = document.getElementById('mainImage');
   const backBtn = document.getElementById('backBtn');
   const forwardBtn = document.getElementById('forwardBtn');
 
-  function updateButtons() {
-    backBtn.disabled = historyStack.length === 0;
-    forwardBtn.disabled = forwardStack.length === 0;
-  }
+  let links = [];
+  let currentIndex = -1;
 
-  function preloadForwardImages() {
-    forwardStack = [];
-    let preloadCount = 0;
-    for (let i = 0; i < links.length && preloadCount < maxPreload; i++) {
-      const randomIndex = Math.floor(Math.random() * links.length);
-      if (randomIndex !== currentIndex && !forwardStack.includes(randomIndex) && !historyStack.includes(randomIndex)) {
-        const img = new Image();
-        img.onload = () => {
-          forwardStack.push(randomIndex);
-          updateButtons();
-        };
-        img.src = links[randomIndex];
-        preloadCount++;
-      }
+  async function loadLinks() {
+    try {
+      const res = await fetch(txtUrl);
+      if (!res.ok) throw new Error("Failed to fetch file");
+      const text = await res.text();
+      links = text.trim().split('\n').filter(line => line.startsWith('http'));
+      if (links.length === 0) throw new Error("No valid image URLs found.");
+      currentIndex = Math.floor(Math.random() * links.length);
+      showImage(currentIndex);
+      updateButtons();
+    } catch (e) {
+      console.error(e);
+      imgElement.alt = "Error loading images.";
     }
   }
 
   function showImage(index) {
     currentIndex = index;
-    imgElement.src = links[currentIndex];
-    imgElement.alt = `Image ${currentIndex + 1} of ${links.length}`;
-    preloadForwardImages();
-    updateButtons();
+    imgElement.src = links[index];
+  }
+
+  function updateButtons() {
+    backBtn.disabled = links.length <= 1;
+    forwardBtn.disabled = links.length <= 1;
   }
 
   backBtn.addEventListener('click', () => {
-    if (historyStack.length > 0) {
-      forwardStack.unshift(currentIndex);
-      if (forwardStack.length > maxPreload) forwardStack.pop();
-      const prevIndex = historyStack.pop();
-      showImage(prevIndex);
-    }
+    currentIndex = (currentIndex - 1 + links.length) % links.length;
+    showImage(currentIndex);
   });
 
   forwardBtn.addEventListener('click', () => {
-    if (forwardStack.length > 0) {
-      historyStack.push(currentIndex);
-      if (historyStack.length > maxHistory) historyStack.shift();
-      const nextIndex = forwardStack.shift();
-      showImage(nextIndex);
-    }
+    currentIndex = (currentIndex + 1) % links.length;
+    showImage(currentIndex);
   });
 
-  document.addEventListener('keydown', (event) => {
-    if (event.key === 'ArrowLeft') backBtn.click();
-    else if (event.key === 'ArrowRight') forwardBtn.click();
-  });
-
-  // Only load from the fixed URL
-  async function loadFixedTxtLinks() {
-    try {
-      const url = 'https://f003.backblazeb2.com/file/links-ref/friendly_urls.txt';
-      const res = await fetch(url);
-      const fileContent = await res.text();
-      links = fileContent.trim().split('\n').filter(Boolean);
-      if (links.length === 0) {
-        imgElement.alt = "No links found in the file.";
-        return;
-      }
-      currentIndex = Math.floor(Math.random() * links.length);
-      showImage(currentIndex);
-    } catch (err) {
-      console.error(err);
-      imgElement.alt = "Failed to load links from the fixed .txt file.";
-    }
-  }
-
-  loadFixedTxtLinks();
+  loadLinks();
 </script>
+
+</body>
+</html>
