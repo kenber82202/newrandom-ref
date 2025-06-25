@@ -15,9 +15,27 @@
       display: flex;
       flex-direction: column;
       align-items: center;
-      justify-content: center;
       height: 100vh;
       overflow: hidden;
+    }
+    #subjectSelector {
+      display: flex;
+      flex-wrap: wrap;
+      justify-content: center;
+      padding: 10px;
+      gap: 10px;
+    }
+    .subject-toggle {
+      background: #222;
+      color: white;
+      border: 1px solid white;
+      padding: 0.5em 1em;
+      border-radius: 5px;
+      cursor: pointer;
+      user-select: none;
+    }
+    .subject-toggle.selected {
+      background: #0a84ff;
     }
     img {
       width: 100vw;
@@ -56,36 +74,18 @@
     #forwardBtn {
       right: 20px;
     }
-    .toggles {
-      position: fixed;
-      top: 10px;
-      left: 50%;
-      transform: translateX(-50%);
-      background: rgba(0,0,0,0.5);
-      padding: 10px 15px;
-      border-radius: 10px;
-      z-index: 1001;
-      display: flex;
-      gap: 10px;
-    }
-    .toggles label {
-      display: flex;
-      align-items: center;
-      gap: 5px;
-      cursor: pointer;
-    }
-    .toggles input[type="checkbox"] {
-      transform: scale(1.3);
+    button {
+      touch-action: manipulation;
     }
   </style>
 </head>
 <body>
 
-<div class="toggles">
-  <label><input type="checkbox" value="People">People</label>
-  <label><input type="checkbox" value="PeoplePlus">PeoplePlus</label>
-  <label><input type="checkbox" value="Anime">Anime</label>
-  <label><input type="checkbox" value="Places">Places</label>
+<div id="subjectSelector">
+  <div class="subject-toggle" data-subject="People">People</div>
+  <div class="subject-toggle" data-subject="PeoplePlus">PeoplePlus</div>
+  <div class="subject-toggle" data-subject="Anime">Anime</div>
+  <div class="subject-toggle" data-subject="Places">Places</div>
 </div>
 
 <img id="mainImage" src="" alt="Random Image" />
@@ -94,101 +94,61 @@
 
 <script>
   const baseURL = 'https://f003.backblazeb2.com/file/links-ref/';
-  const imgElement = document.getElementById('mainImage');
-  const backBtn = document.getElementById('backBtn');
-  const forwardBtn = document.getElementById('forwardBtn');
-  const checkboxes = document.querySelectorAll('.toggles input[type="checkbox"]');
+  const subjectToggles = document.querySelectorAll('.subject-toggle');
 
-  let sourceLists = {}; // { People: [...], Anime: [...], ... }
+  let allLinksBySubject = {};
+  let selectedSubjects = [];
   let currentIndex = -1;
+  let currentSubject = null;
   let historyStack = [];
   let forwardStack = [];
   const maxHistory = 3;
   const maxPreload = 3;
+
+  const imgElement = document.getElementById('mainImage');
+  const backBtn = document.getElementById('backBtn');
+  const forwardBtn = document.getElementById('forwardBtn');
 
   function updateButtons() {
     backBtn.disabled = historyStack.length === 0;
     forwardBtn.disabled = forwardStack.length === 0;
   }
 
-  function getSelectedSources() {
-    return [...checkboxes].filter(cb => cb.checked).map(cb => cb.value);
-  }
-
-  async function fetchLinksFor(subject) {
-    const url = `${baseURL}${subject}.txt`;
-    try {
-      const response = await fetch(url);
-      const text = await response.text();
-      return text.trim().split('\n').filter(Boolean);
-    } catch (err) {
-      console.error(`Failed to fetch ${subject}:`, err);
-      return [];
-    }
-  }
-
-  async function loadSelectedSources() {
-    const selected = getSelectedSources();
-    if (selected.length === 0) {
-      alert("Please select at least one subject.");
-      return;
-    }
-    sourceLists = {};
-    for (const subject of selected) {
-      sourceLists[subject] = await fetchLinksFor(subject);
-    }
-    forwardStack = [];
-    historyStack = [];
-    showRandomImage();
-  }
-
-  function getRandomImageSource() {
-    const subjects = Object.keys(sourceLists).filter(k => sourceLists[k].length > 0);
-    if (subjects.length === 0) return null;
-    const chosenSubject = subjects[Math.floor(Math.random() * subjects.length)];
-    const links = sourceLists[chosenSubject];
-    const randomIndex = Math.floor(Math.random() * links.length);
-    return { subject: chosenSubject, url: links[randomIndex], index: randomIndex };
-  }
-
   function preloadForwardImages() {
     forwardStack = [];
     let preloadCount = 0;
-    const subjects = Object.keys(sourceLists);
 
-    while (preloadCount < maxPreload) {
-      const image = getRandomImageSource();
-      if (!image) break;
+    while (preloadCount < maxPreload && selectedSubjects.length > 0) {
+      const subject = getRandomSubject();
+      const links = allLinksBySubject[subject];
+      const randomIndex = Math.floor(Math.random() * links.length);
       const img = new Image();
       img.onload = () => {
-        forwardStack.push(image);
+        forwardStack.push({ subject, index: randomIndex });
         updateButtons();
       };
-      img.src = image.url;
+      img.src = links[randomIndex];
       preloadCount++;
     }
   }
 
-  function showImage(imageData) {
-    currentIndex = imageData;
-    imgElement.src = imageData.url;
-    imgElement.alt = `${imageData.subject} image`;
+  function getRandomSubject() {
+    return selectedSubjects[Math.floor(Math.random() * selectedSubjects.length)];
+  }
+
+  function showImage(subjectIndexObj) {
+    const { subject, index } = subjectIndexObj;
+    currentSubject = subject;
+    currentIndex = index;
+    imgElement.src = allLinksBySubject[subject][index];
+    imgElement.alt = `Image ${index + 1} of ${subject}`;
     preloadForwardImages();
     updateButtons();
   }
 
-  function showRandomImage() {
-    const image = getRandomImageSource();
-    if (image) {
-      showImage(image);
-    } else {
-      imgElement.alt = "No images loaded.";
-    }
-  }
-
   backBtn.addEventListener('click', () => {
     if (historyStack.length > 0) {
-      forwardStack.unshift(currentIndex);
+      forwardStack.unshift({ subject: currentSubject, index: currentIndex });
       if (forwardStack.length > maxPreload) forwardStack.pop();
       const prev = historyStack.pop();
       showImage(prev);
@@ -197,14 +157,10 @@
 
   forwardBtn.addEventListener('click', () => {
     if (forwardStack.length > 0) {
-      historyStack.push(currentIndex);
+      historyStack.push({ subject: currentSubject, index: currentIndex });
       if (historyStack.length > maxHistory) historyStack.shift();
       const next = forwardStack.shift();
       showImage(next);
-    } else {
-      historyStack.push(currentIndex);
-      if (historyStack.length > maxHistory) historyStack.shift();
-      showRandomImage();
     }
   });
 
@@ -213,9 +169,33 @@
     else if (event.key === 'ArrowRight') forwardBtn.click();
   });
 
-  checkboxes.forEach(cb => {
-    cb.addEventListener('change', () => {
-      loadSelectedSources();
+  subjectToggles.forEach(toggle => {
+    toggle.addEventListener('click', () => {
+      toggle.classList.toggle('selected');
+      const subject = toggle.dataset.subject;
+      if (toggle.classList.contains('selected')) {
+        selectedSubjects.push(subject);
+        if (!allLinksBySubject[subject]) {
+          fetch(`${baseURL}${subject}.txt`)
+            .then(res => res.text())
+            .then(text => {
+              allLinksBySubject[subject] = text.trim().split('\n').filter(Boolean);
+              if (selectedSubjects.length === 1) {
+                const index = Math.floor(Math.random() * allLinksBySubject[subject].length);
+                showImage({ subject, index });
+              }
+            });
+        }
+      } else {
+        selectedSubjects = selectedSubjects.filter(s => s !== subject);
+        if (selectedSubjects.length === 0) {
+          imgElement.src = '';
+          imgElement.alt = 'No subject selected';
+          historyStack = [];
+          forwardStack = [];
+          updateButtons();
+        }
+      }
     });
   });
 </script>
