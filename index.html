@@ -1,120 +1,197 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-  <!-- Make it behave like a fullscreen web app on iPhone -->
-<meta name="apple-mobile-web-app-capable" content="yes">
-<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
-<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
-
-<meta charset="UTF-8" />
-<meta name="viewport" content="width=device-width, initial-scale=1" />
-<title>Random Image Navigator</title>
-<style>
-  body {
-    margin: 0; padding: 0;
-    background: #000;
-    color: #fff;
-    font-family: sans-serif;
-    display: flex;
-    justify-content: center;
-    align-items: center;
-    height: 100vh;
-    overflow: hidden;
-  }
-  img {
-    width: 100vw;
-    height: 100vh;
-    object-fit: contain;
-    border: 3px solid #fff;
-    border-radius: 8px;
-  }
-  button {
-    position: fixed;
-    bottom: 20px;
-    font-size: 3em;
-    padding: 0.1em 0.3em;
-    cursor: pointer;
-    border-radius: 5px;
-    border: none;
-    background: rgba(30,30,30,0.8);
-    color: #fff;
-    user-select: none;
-    transition: background 0.3s;
-    z-index: 1000;
-  }
-  button:disabled {
-    opacity: 0.3;
-    cursor: default;
-  }
-  button:hover:not(:disabled) {
-    background: rgba(70,70,70,0.9);
-  }
-  #backBtn {
-    left: 20px;
-  }
-  #forwardBtn {
-    right: 20px;
-  }
-  button {
-    touch-action: manipulation;
-  }
-</style>
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
+  <meta charset="UTF-8" />
+  <title>Random Image Navigator</title>
+  <style>
+    body {
+      margin: 0; padding: 0;
+      background: #000;
+      color: #fff;
+      font-family: sans-serif;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      height: 100vh;
+      overflow: hidden;
+    }
+    img {
+      width: 100vw;
+      height: 100vh;
+      object-fit: contain;
+      border: 3px solid #fff;
+      border-radius: 8px;
+      position: absolute;
+      top: 0;
+      left: 0;
+    }
+    button {
+      position: fixed;
+      bottom: 20px;
+      font-size: 3em;
+      padding: 0.1em 0.3em;
+      cursor: pointer;
+      border-radius: 5px;
+      border: none;
+      background: rgba(30,30,30,0.8);
+      color: #fff;
+      user-select: none;
+      transition: background 0.3s;
+      z-index: 1000;
+    }
+    button:disabled {
+      opacity: 0.3;
+      cursor: default;
+    }
+    button:hover:not(:disabled) {
+      background: rgba(70,70,70,0.9);
+    }
+    #backBtn {
+      left: 20px;
+    }
+    #forwardBtn {
+      right: 20px;
+    }
+    .toggles {
+      position: fixed;
+      top: 10px;
+      left: 50%;
+      transform: translateX(-50%);
+      background: rgba(0,0,0,0.5);
+      padding: 10px 15px;
+      border-radius: 10px;
+      z-index: 1001;
+      display: flex;
+      gap: 10px;
+    }
+    .toggles label {
+      display: flex;
+      align-items: center;
+      gap: 5px;
+      cursor: pointer;
+    }
+    .toggles input[type="checkbox"] {
+      transform: scale(1.3);
+    }
+  </style>
 </head>
 <body>
+
+<div class="toggles">
+  <label><input type="checkbox" value="People">People</label>
+  <label><input type="checkbox" value="People+">People+</label>
+  <label><input type="checkbox" value="Anime">Anime</label>
+  <label><input type="checkbox" value="Places">Places</label>
+</div>
 
 <img id="mainImage" src="" alt="Random Image" />
 <button id="backBtn" disabled aria-label="Previous image">&lt;</button>
 <button id="forwardBtn" disabled aria-label="Next image">&gt;</button>
 
 <script>
-  let links = [];
+  const baseURL = 'https://f003.backblazeb2.com/file/links-ref/';
+  const imgElement = document.getElementById('mainImage');
+  const backBtn = document.getElementById('backBtn');
+  const forwardBtn = document.getElementById('forwardBtn');
+  const checkboxes = document.querySelectorAll('.toggles input[type="checkbox"]');
+
+  let sourceLists = {}; // { People: [...], Anime: [...], ... }
   let currentIndex = -1;
   let historyStack = [];
   let forwardStack = [];
   const maxHistory = 3;
   const maxPreload = 3;
 
-  const imgElement = document.getElementById('mainImage');
-  const backBtn = document.getElementById('backBtn');
-  const forwardBtn = document.getElementById('forwardBtn');
-
   function updateButtons() {
     backBtn.disabled = historyStack.length === 0;
     forwardBtn.disabled = forwardStack.length === 0;
   }
 
-  function preloadForwardImages() {
-    forwardStack = [];
-    let preloadCount = 0;
+  function getSelectedSources() {
+    return [...checkboxes].filter(cb => cb.checked).map(cb => cb.value);
+  }
 
-    for (let i = 0; i < links.length && preloadCount < maxPreload; i++) {
-      const randomIndex = Math.floor(Math.random() * links.length);
-      if (randomIndex !== currentIndex && !forwardStack.includes(randomIndex) && !historyStack.includes(randomIndex)) {
-        const img = new Image();
-        img.onload = () => {
-          forwardStack.push(randomIndex);
-          updateButtons();
-        };
-        img.src = links[randomIndex];
-        preloadCount++;
-      }
+  async function fetchLinksFor(subject) {
+    const url = `${baseURL}${subject}.txt`;
+    try {
+      const response = await fetch(url);
+      const text = await response.text();
+      return text.trim().split('\n').filter(Boolean);
+    } catch (err) {
+      console.error(`Failed to fetch ${subject}:`, err);
+      return [];
     }
   }
 
-  function showImage(index) {
-    currentIndex = index;
-    imgElement.src = links[currentIndex];
-    imgElement.alt = `Image ${currentIndex + 1} of ${links.length}`;
+  async function loadSelectedSources() {
+    const selected = getSelectedSources();
+    if (selected.length === 0) {
+      alert("Please select at least one subject.");
+      return;
+    }
+    sourceLists = {};
+    for (const subject of selected) {
+      sourceLists[subject] = await fetchLinksFor(subject);
+    }
+    forwardStack = [];
+    historyStack = [];
+    showRandomImage();
+  }
+
+  function getRandomImageSource() {
+    const subjects = Object.keys(sourceLists).filter(k => sourceLists[k].length > 0);
+    if (subjects.length === 0) return null;
+    const chosenSubject = subjects[Math.floor(Math.random() * subjects.length)];
+    const links = sourceLists[chosenSubject];
+    const randomIndex = Math.floor(Math.random() * links.length);
+    return { subject: chosenSubject, url: links[randomIndex], index: randomIndex };
+  }
+
+  function preloadForwardImages() {
+    forwardStack = [];
+    let preloadCount = 0;
+    const subjects = Object.keys(sourceLists);
+
+    while (preloadCount < maxPreload) {
+      const image = getRandomImageSource();
+      if (!image) break;
+      const img = new Image();
+      img.onload = () => {
+        forwardStack.push(image);
+        updateButtons();
+      };
+      img.src = image.url;
+      preloadCount++;
+    }
+  }
+
+  function showImage(imageData) {
+    currentIndex = imageData;
+    imgElement.src = imageData.url;
+    imgElement.alt = `${imageData.subject} image`;
     preloadForwardImages();
     updateButtons();
+  }
+
+  function showRandomImage() {
+    const image = getRandomImageSource();
+    if (image) {
+      showImage(image);
+    } else {
+      imgElement.alt = "No images loaded.";
+    }
   }
 
   backBtn.addEventListener('click', () => {
     if (historyStack.length > 0) {
       forwardStack.unshift(currentIndex);
       if (forwardStack.length > maxPreload) forwardStack.pop();
-      const prevIndex = historyStack.pop();
-      showImage(prevIndex);
+      const prev = historyStack.pop();
+      showImage(prev);
     }
   });
 
@@ -122,39 +199,26 @@
     if (forwardStack.length > 0) {
       historyStack.push(currentIndex);
       if (historyStack.length > maxHistory) historyStack.shift();
-      const nextIndex = forwardStack.shift();
-      showImage(nextIndex);
+      const next = forwardStack.shift();
+      showImage(next);
+    } else {
+      historyStack.push(currentIndex);
+      if (historyStack.length > maxHistory) historyStack.shift();
+      showRandomImage();
     }
   });
 
   document.addEventListener('keydown', (event) => {
-    if (event.key === 'ArrowLeft') {
-      backBtn.click();
-    } else if (event.key === 'ArrowRight') {
-      forwardBtn.click();
-    }
+    if (event.key === 'ArrowLeft') backBtn.click();
+    else if (event.key === 'ArrowRight') forwardBtn.click();
   });
 
-  // CHANGED FETCH URL HERE
-  fetch('https://f003.backblazeb2.com/file/links-ref/friendly_urls.txt')
-    .then(response => response.text())
-    .then(text => {
-      links = text.trim().split('\n').filter(Boolean);
-      if (links.length === 0) {
-        imgElement.alt = "No images found in URL list";
-        forwardBtn.disabled = true;
-        backBtn.disabled = true;
-        return;
-      }
-      currentIndex = Math.floor(Math.random() * links.length);
-      showImage(currentIndex);
-    })
-    .catch(err => {
-      imgElement.alt = "Failed to load image list";
-      console.error(err);
+  checkboxes.forEach(cb => {
+    cb.addEventListener('change', () => {
+      loadSelectedSources();
     });
+  });
 </script>
-
 
 </body>
 </html>
