@@ -1,96 +1,49 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-  <meta name="apple-mobile-web-app-capable" content="yes">
-  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
-  <meta charset="UTF-8" />
-  <title>Random Image Navigator</title>
+  <meta charset="UTF-8">
+  <title>Image Viewer</title>
   <style>
-    body {
-      margin: 0; padding: 0;
+    html, body {
+      margin: 0;
+      height: 100%;
       background: #000;
-      color: #fff;
-      font-family: sans-serif;
-      height: 100vh;
       overflow: hidden;
-      user-select: none;
+    }
+
+    #container {
+      width: 100vw;
+      height: 100vh;
+      position: relative;
+      overflow: hidden;
     }
 
     img {
       position: absolute;
       top: 50%;
       left: 50%;
-      max-width: 100%;
-      max-height: 100%;
-      object-fit: contain;
-      transform-origin: center center;
-      transition: transform 0.05s;
+      transform-origin: top left;
       cursor: grab;
-    }
-
-    button {
-      position: fixed;
-      bottom: 20px;
-      font-size: 2.5em;
-      padding: 0.1em 0.3em;
-      cursor: pointer;
-      border-radius: 5px;
-      border: none;
-      background: rgba(30,30,30,0.8);
-      color: #fff;
-      z-index: 1000;
-    }
-
-    button:disabled {
-      opacity: 0.3;
-      cursor: default;
-    }
-
-    button:hover:not(:disabled) {
-      background: rgba(70,70,70,0.9);
-    }
-
-    #backBtn { left: 20px; }
-    #forwardBtn { right: 20px; }
-
-    .toggles {
-      position: fixed;
-      top: 10px;
-      left: 50%;
-      transform: translateX(-50%);
-      background: rgba(0,0,0,0.5);
-      padding: 10px 15px;
-      border-radius: 10px;
-      z-index: 1001;
-      display: flex;
-      gap: 10px;
-    }
-
-    .toggles label {
-      display: flex;
-      align-items: center;
-      gap: 5px;
-      cursor: pointer;
+      user-select: none;
+      -webkit-user-drag: none;
     }
 
     .tools {
       position: fixed;
       bottom: 20px;
       right: 20px;
-      z-index: 1002;
+      z-index: 10;
       display: flex;
-      flex-direction: column;
       gap: 8px;
-      background: rgba(0,0,0,0.4);
-      padding: 10px;
-      border-radius: 12px;
+      background: rgba(0,0,0,0.5);
+      padding: 8px 12px;
+      border-radius: 10px;
     }
 
     .tools button {
       width: 40px;
       height: 40px;
-      font-size: 1.1em;
+      font-size: 18px;
       border-radius: 50%;
       border: none;
       background: rgba(255,255,255,0.1);
@@ -105,266 +58,118 @@
   </style>
 </head>
 <body>
+  <div id="container">
+    <img id="viewer" src="https://picsum.photos/1200/800" alt="Image">
+  </div>
 
-<div class="toggles">
-  <label><input type="checkbox" value="People">People</label>
-  <label><input type="checkbox" value="PeoplePlus">PeoplePlus</label>
-  <label><input type="checkbox" value="Anime">Anime</label>
-  <label><input type="checkbox" value="Places">Places</label>
-  <label><input type="checkbox" value="Walk">Walk</label>
-</div>
+  <div class="tools">
+    <button id="zoomIn">+</button>
+    <button id="zoomOut">−</button>
+    <button id="flip">F</button>
+    <button id="reset">R</button>
+  </div>
 
-<img id="mainImage" src="" alt="Image Viewer" draggable="false" />
+  <script>
+    const img = document.getElementById('viewer');
+    const container = document.getElementById('container');
+    let scale = 1;
+    let originX = 0;
+    let originY = 0;
+    let isDragging = false;
+    let startX = 0;
+    let startY = 0;
+    let flipX = 1;
 
-<button id="backBtn" disabled>&lt;</button>
-<button id="forwardBtn" disabled>&gt;</button>
-
-<div class="tools">
-  <button id="zoomInBtn">+</button>
-  <button id="zoomOutBtn">−</button>
-  <button id="flipBtn">F</button>
-  <button id="resetBtn">R</button>
-</div>
-
-<script>
-  const baseURL = 'https://f003.backblazeb2.com/file/links-ref/';
-  const img = document.getElementById('mainImage');
-  const backBtn = document.getElementById('backBtn');
-  const forwardBtn = document.getElementById('forwardBtn');
-  const flipBtn = document.getElementById('flipBtn');
-  const resetBtn = document.getElementById('resetBtn');
-  const zoomInBtn = document.getElementById('zoomInBtn');
-  const zoomOutBtn = document.getElementById('zoomOutBtn');
-  const checkboxes = document.querySelectorAll('.toggles input[type="checkbox"]');
-
-  let sourceLists = {};
-  let currentIndex = -1;
-  let historyStack = [];
-  let forwardStack = [];
-  const maxHistory = 3;
-  const maxPreload = 3;
-
-  let scale = 1;
-  let originX = 0;
-  let originY = 0;
-  let flip = false;
-
-  let isDragging = false;
-  let startX = 0;
-  let startY = 0;
-
-  // Prevent browser's native drag image
-  img.ondragstart = () => false;
-
-  function updateButtons() {
-    backBtn.disabled = historyStack.length === 0;
-    forwardBtn.disabled = forwardStack.length === 0;
-  }
-
-  function getSelectedSources() {
-    return [...checkboxes].filter(cb => cb.checked).map(cb => cb.value);
-  }
-
-  async function fetchLinksFor(subject) {
-    const url = `${baseURL}${subject}.txt`;
-    try {
-      const response = await fetch(url);
-      const text = await response.text();
-      return text.trim().split('\n').filter(Boolean);
-    } catch (err) {
-      console.error(`Failed to fetch ${subject}:`, err);
-      return [];
+    function applyTransform() {
+      img.style.transform = `translate(-50%, -50%) translate(${originX}px, ${originY}px) scale(${scale * flipX}, ${scale})`;
     }
-  }
 
-  async function loadSelectedSources() {
-    const selected = getSelectedSources();
-    if (selected.length === 0) {
-      alert("Please select at least one subject.");
-      return;
-    }
-    sourceLists = {};
-    for (const subject of selected) {
-      sourceLists[subject] = await fetchLinksFor(subject);
-    }
-    forwardStack = [];
-    historyStack = [];
-    showRandomImage();
-  }
+    // Prevent browser drag behavior
+    img.ondragstart = () => false;
 
-  function getRandomImageSource() {
-    const subjects = Object.keys(sourceLists).filter(k => sourceLists[k].length > 0);
-    if (subjects.length === 0) return null;
-    const chosenSubject = subjects[Math.floor(Math.random() * subjects.length)];
-    const links = sourceLists[chosenSubject];
-    const randomIndex = Math.floor(Math.random() * links.length);
-    return { subject: chosenSubject, url: links[randomIndex], index: randomIndex };
-  }
-
-  function preloadForwardImages() {
-    forwardStack = [];
-    let preloadCount = 0;
-    const subjects = Object.keys(sourceLists);
-    while (preloadCount < maxPreload) {
-      const image = getRandomImageSource();
-      if (!image) break;
-      const preloadImg = new Image();
-      preloadImg.onload = () => {
-        forwardStack.push(image);
-        updateButtons();
-      };
-      preloadImg.src = image.url;
-      preloadCount++;
-    }
-  }
-
-  function applyTransform() {
-    const flipScale = flip ? -1 : 1;
-    scale = Math.max(0.1, Math.min(10, scale));
-    img.style.transform = `translate(-50%, -50%) scale(${flipScale * scale}, ${scale}) translate(${originX}px, ${originY}px)`;
-  }
-
-  function resetView() {
-    scale = 1;
-    originX = 0;
-    originY = 0;
-    flip = false;
-    applyTransform();
-  }
-
-  function showImage(imageData) {
-    currentIndex = imageData;
-    img.src = imageData.url;
-    img.alt = `${imageData.subject} image`;
-    resetView();
-    preloadForwardImages();
-    updateButtons();
-  }
-
-  function showRandomImage() {
-    const image = getRandomImageSource();
-    if (image) showImage(image);
-    else img.alt = "No images loaded.";
-  }
-
-  backBtn.addEventListener('click', () => {
-    if (historyStack.length > 0) {
-      forwardStack.unshift(currentIndex);
-      if (forwardStack.length > maxPreload) forwardStack.pop();
-      const prev = historyStack.pop();
-      showImage(prev);
-    }
-  });
-
-  forwardBtn.addEventListener('click', () => {
-    if (forwardStack.length > 0) {
-      historyStack.push(currentIndex);
-      if (historyStack.length > maxHistory) historyStack.shift();
-      const next = forwardStack.shift();
-      showImage(next);
-    } else {
-      historyStack.push(currentIndex);
-      if (historyStack.length > maxHistory) historyStack.shift();
-      showRandomImage();
-    }
-  });
-
-  checkboxes.forEach(cb => cb.addEventListener('change', loadSelectedSources));
-  flipBtn.addEventListener("click", () => { flip = !flip; applyTransform(); });
-  resetBtn.addEventListener("click", resetView);
-  zoomInBtn.addEventListener("click", () => {
-    scale *= 1.1;
-    applyTransform();
-  });
-  zoomOutBtn.addEventListener("click", () => {
-    scale /= 1.1;
-    applyTransform();
-  });
-
-  // Improved drag-to-pan
-  img.addEventListener("mousedown", (e) => {
-    if (e.button !== 0) return;
-    isDragging = true;
-    startX = e.clientX;
-    startY = e.clientY;
-    img.style.cursor = "grabbing";
-  });
-
-  window.addEventListener("mousemove", (e) => {
-    if (!isDragging) return;
-    const dx = (e.clientX - startX) / scale;
-    const dy = (e.clientY - startY) / scale;
-    originX += dx;
-    originY += dy;
-    startX = e.clientX;
-    startY = e.clientY;
-    applyTransform();
-  });
-
-  window.addEventListener("mouseup", (e) => {
-    if (e.button === 0) {
-      isDragging = false;
-      img.style.cursor = "grab";
-    }
-  });
-
-  window.addEventListener("mouseleave", () => {
-    isDragging = false;
-    img.style.cursor = "grab";
-  });
-
-  // Touch support
-  img.addEventListener("touchstart", (e) => {
-    if (e.touches.length === 1) {
+    // Mouse drag to pan
+    img.addEventListener('mousedown', (e) => {
+      e.preventDefault();
       isDragging = true;
-      startX = e.touches[0].clientX;
-      startY = e.touches[0].clientY;
-    }
-  });
+      startX = e.clientX;
+      startY = e.clientY;
+      img.style.cursor = 'grabbing';
+    });
 
-  img.addEventListener("touchmove", (e) => {
-    if (e.touches.length === 1 && isDragging) {
-      const dx = (e.touches[0].clientX - startX) / scale;
-      const dy = (e.touches[0].clientY - startY) / scale;
+    window.addEventListener('mousemove', (e) => {
+      if (!isDragging) return;
+      const dx = (e.clientX - startX) / scale;
+      const dy = (e.clientY - startY) / scale;
       originX += dx;
       originY += dy;
-      startX = e.touches[0].clientX;
-      startY = e.touches[0].clientY;
+      startX = e.clientX;
+      startY = e.clientY;
       applyTransform();
-    }
-  });
+    });
 
-  img.addEventListener("touchend", () => {
-    isDragging = false;
-  });
+    window.addEventListener('mouseup', () => {
+      isDragging = false;
+      img.style.cursor = 'grab';
+    });
 
-  // Mouse wheel zoom centered on screen
-  window.addEventListener("wheel", (e) => {
-    e.preventDefault();
-    const direction = e.deltaY > 0 ? -1 : 1;
-    const factor = 1 + direction * 0.1;
+    // Zoom with mouse wheel
+    container.addEventListener('wheel', (e) => {
+      e.preventDefault();
+      const delta = e.deltaY < 0 ? 1.1 : 0.9;
+      scale *= delta;
+      applyTransform();
+    });
 
-    const rect = img.getBoundingClientRect();
-    const centerX = window.innerWidth / 2;
-    const centerY = window.innerHeight / 2;
-    const offsetX = (centerX - rect.left - rect.width / 2) / scale;
-    const offsetY = (centerY - rect.top - rect.height / 2) / scale;
+    // Touch support
+    let lastTouch = null;
+    container.addEventListener('touchstart', (e) => {
+      if (e.touches.length === 1) {
+        lastTouch = e.touches[0];
+        isDragging = true;
+      }
+    });
 
-    originX -= offsetX * (factor - 1);
-    originY -= offsetY * (factor - 1);
+    container.addEventListener('touchmove', (e) => {
+      if (e.touches.length === 1 && isDragging) {
+        const dx = (e.touches[0].clientX - lastTouch.clientX) / scale;
+        const dy = (e.touches[0].clientY - lastTouch.clientY) / scale;
+        originX += dx;
+        originY += dy;
+        lastTouch = e.touches[0];
+        applyTransform();
+      }
+    });
 
-    scale *= factor;
+    container.addEventListener('touchend', () => {
+      isDragging = false;
+    });
+
+    // Buttons
+    document.getElementById('zoomIn').addEventListener('click', () => {
+      scale *= 1.2;
+      applyTransform();
+    });
+
+    document.getElementById('zoomOut').addEventListener('click', () => {
+      scale /= 1.2;
+      applyTransform();
+    });
+
+    document.getElementById('flip').addEventListener('click', () => {
+      flipX *= -1;
+      applyTransform();
+    });
+
+    document.getElementById('reset').addEventListener('click', () => {
+      scale = 1;
+      originX = 0;
+      originY = 0;
+      flipX = 1;
+      applyTransform();
+    });
+
+    // Initial transform
     applyTransform();
-  }, { passive: false });
-
-  // Keyboard shortcuts
-  document.addEventListener('keydown', (event) => {
-    if (event.key === 'ArrowLeft') backBtn.click();
-    else if (event.key === 'ArrowRight') forwardBtn.click();
-    else if (event.key === '+') zoomInBtn.click();
-    else if (event.key === '-') zoomOutBtn.click();
-  });
-</script>
-
+  </script>
 </body>
 </html>
