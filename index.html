@@ -18,16 +18,32 @@
       justify-content: center;
       height: 100vh;
       overflow: hidden;
+      touch-action: none; /* Disable browser touch gestures */
     }
-    img {
+    .image-container {
+      position: relative;
       width: 100vw;
       height: 100vh;
+      overflow: hidden;
+    }
+    img {
+      width: auto;
+      height: auto;
+      max-width: 100vw;
+      max-height: 100vh;
       object-fit: contain;
       border: 3px solid #fff;
       border-radius: 8px;
       position: absolute;
-      top: 0;
-      left: 0;
+      top: 50%;
+      left: 50%;
+      transform: translate(-50%, -50%);
+      cursor: grab;
+      user-select: none;
+      -webkit-user-drag: none;
+    }
+    img:active {
+      cursor: grabbing;
     }
     button {
       position: fixed;
@@ -89,7 +105,9 @@
   <label><input type="checkbox" value="Walk">Walk</label>
 </div>
 
-<img id="mainImage" src="" alt="Random Image" />
+<div class="image-container">
+  <img id="mainImage" src="" alt="Random Image" draggable="false" />
+</div>
 <button id="backBtn" disabled aria-label="Previous image">&lt;</button>
 <button id="forwardBtn" disabled aria-label="Next image">&gt;</button>
 
@@ -99,13 +117,89 @@
   const backBtn = document.getElementById('backBtn');
   const forwardBtn = document.getElementById('forwardBtn');
   const checkboxes = document.querySelectorAll('.toggles input[type="checkbox"]');
+  const imageContainer = document.querySelector('.image-container');
 
-  let sourceLists = {}; // { People: [...], Anime: [...], ... }
+  let sourceLists = {};
   let currentImage = null;
   let historyStack = [];
   let forwardStack = [];
   const maxHistory = 5;
   const maxPreload = 3;
+
+  // Panning variables
+  let isDragging = false;
+  let startPos = { x: 0, y: 0 };
+  let translate = { x: 0, y: 0 };
+  let scale = 1;
+
+  // Prevent default drag behavior
+  document.addEventListener('dragstart', (e) => {
+    if (e.target === imgElement) {
+      e.preventDefault();
+    }
+  });
+
+  // Disable context menu on image
+  imgElement.addEventListener('contextmenu', (e) => {
+    e.preventDefault();
+  });
+
+  // Panning functionality
+  imgElement.addEventListener('mousedown', startDrag);
+  imgElement.addEventListener('touchstart', startDrag, { passive: false });
+
+  function startDrag(e) {
+    e.preventDefault();
+    isDragging = true;
+    startPos = getClientPos(e);
+    imgElement.style.cursor = 'grabbing';
+  }
+
+  document.addEventListener('mousemove', drag);
+  document.addEventListener('touchmove', drag, { passive: false });
+
+  function drag(e) {
+    if (!isDragging) return;
+    e.preventDefault();
+    
+    const currentPos = getClientPos(e);
+    translate.x += currentPos.x - startPos.x;
+    translate.y += currentPos.y - startPos.y;
+    startPos = currentPos;
+    
+    updateImagePosition();
+  }
+
+  document.addEventListener('mouseup', endDrag);
+  document.addEventListener('touchend', endDrag);
+
+  function endDrag() {
+    isDragging = false;
+    imgElement.style.cursor = 'grab';
+  }
+
+  function getClientPos(e) {
+    if (e.type.includes('touch')) {
+      return {
+        x: e.touches[0].clientX,
+        y: e.touches[0].clientY
+      };
+    } else {
+      return {
+        x: e.clientX,
+        y: e.clientY
+      };
+    }
+  }
+
+  function updateImagePosition() {
+    imgElement.style.transform = `translate(calc(-50% + ${translate.x}px), calc(-50% + ${translate.y}px))`;
+  }
+
+  function resetImagePosition() {
+    translate = { x: 0, y: 0 };
+    updateImagePosition();
+  }
 
   function updateButtons() {
     backBtn.disabled = historyStack.length === 0;
@@ -153,7 +247,6 @@
   }
 
   function preloadForwardImages() {
-    // Only preload if forward stack is empty (we're at the newest image)
     if (forwardStack.length > 0) return;
     
     let preloadCount = 0;
@@ -180,6 +273,7 @@
     imgElement.src = imageData.url;
     imgElement.alt = `${imageData.subject} image`;
     currentImage = imageData;
+    resetImagePosition(); // Reset pan position when new image loads
     preloadForwardImages();
     updateButtons();
   }
@@ -187,7 +281,6 @@
   function showRandomImage() {
     const image = getRandomImageSource();
     if (image) {
-      // When showing a new random image (not from navigation), add current to history
       if (currentImage) {
         historyStack.push(currentImage);
         if (historyStack.length > maxHistory) historyStack.shift();
@@ -200,12 +293,10 @@
 
   backBtn.addEventListener('click', () => {
     if (historyStack.length > 0) {
-      // Move current image to forward stack
       if (currentImage) {
         forwardStack.unshift(currentImage);
         if (forwardStack.length > maxPreload) forwardStack.pop();
       }
-      // Get previous image from history
       const prev = historyStack.pop();
       showImage(prev);
     }
@@ -213,20 +304,16 @@
 
   forwardBtn.addEventListener('click', () => {
     if (forwardStack.length > 0) {
-      // Move current image back to history
       if (currentImage) {
         historyStack.push(currentImage);
         if (historyStack.length > maxHistory) historyStack.shift();
       }
-      // Get next image from forward stack
       const next = forwardStack.shift();
       showImage(next);
-      // Preload more images if we're running low
       if (forwardStack.length < 2) {
         preloadForwardImages();
       }
     } else {
-      // If no forward history, get a new random image
       showRandomImage();
     }
   });
