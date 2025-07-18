@@ -18,16 +18,21 @@
       justify-content: center;
       height: 100vh;
       overflow: hidden;
+      touch-action: none;
     }
-    img {
+    .image-container {
+      position: relative;
       width: 100vw;
       height: 100vh;
-      object-fit: contain;
+      overflow: hidden;
+    }
+    img {
+      position: absolute;
+      max-width: none;
+      transform-origin: 0 0;
+      transition: transform 0.1s;
       border: 3px solid #fff;
       border-radius: 8px;
-      position: absolute;
-      top: 0;
-      left: 0;
     }
     button {
       position: fixed;
@@ -77,6 +82,20 @@
     .toggles input[type="checkbox"] {
       transform: scale(1.3);
     }
+    .tools {
+      position: fixed;
+      bottom: 20px;
+      left: 50%;
+      transform: translateX(-50%);
+      display: flex;
+      gap: 10px;
+      z-index: 1000;
+    }
+    .tools button {
+      position: static;
+      font-size: 1.5em;
+      padding: 5px 10px;
+    }
   </style>
 </head>
 <body>
@@ -87,10 +106,17 @@
   <label><input type="checkbox" value="Anime">Anime</label>
   <label><input type="checkbox" value="Places">Places</label>
   <label><input type="checkbox" value="Walk">Walk</label>
-
 </div>
 
-<img id="mainImage" src="" alt="Random Image" />
+<div class="image-container">
+  <img id="mainImage" src="" alt="Random Image" />
+</div>
+
+<div class="tools">
+  <button id="resetBtn" title="Reset zoom and position">↻</button>
+  <button id="flipBtn" title="Flip horizontal">⇄</button>
+</div>
+
 <button id="backBtn" disabled aria-label="Previous image">&lt;</button>
 <button id="forwardBtn" disabled aria-label="Next image">&gt;</button>
 
@@ -99,14 +125,24 @@
   const imgElement = document.getElementById('mainImage');
   const backBtn = document.getElementById('backBtn');
   const forwardBtn = document.getElementById('forwardBtn');
+  const resetBtn = document.getElementById('resetBtn');
+  const flipBtn = document.getElementById('flipBtn');
   const checkboxes = document.querySelectorAll('.toggles input[type="checkbox"]');
+  const imageContainer = document.querySelector('.image-container');
 
   let sourceLists = {}; // { People: [...], Anime: [...], ... }
-  let currentIndex = -1;
+  let currentImage = null;
   let historyStack = [];
   let forwardStack = [];
-  const maxHistory = 3;
-  const maxPreload = 3;
+  const maxHistory = 5;
+  
+  // Image transform state
+  let scale = 1;
+  let posX = 0;
+  let posY = 0;
+  let isDragging = false;
+  let startX, startY, startPosX, startPosY;
+  let isFlipped = false;
 
   function updateButtons() {
     backBtn.disabled = historyStack.length === 0;
@@ -153,29 +189,38 @@
     return { subject: chosenSubject, url: links[randomIndex], index: randomIndex };
   }
 
-  function preloadForwardImages() {
-    forwardStack = [];
-    let preloadCount = 0;
-    const subjects = Object.keys(sourceLists);
+  function resetImageTransform() {
+    scale = 1;
+    posX = 0;
+    posY = 0;
+    isFlipped = false;
+    applyTransform();
+  }
 
-    while (preloadCount < maxPreload) {
-      const image = getRandomImageSource();
-      if (!image) break;
-      const img = new Image();
-      img.onload = () => {
-        forwardStack.push(image);
-        updateButtons();
-      };
-      img.src = image.url;
-      preloadCount++;
+  function applyTransform() {
+    let transform = `translate(${posX}px, ${posY}px) scale(${scale})`;
+    if (isFlipped) {
+      transform += ` scaleX(-1)`;
     }
+    imgElement.style.transform = transform;
   }
 
   function showImage(imageData) {
-    currentIndex = imageData;
+    // Add current image to history if it exists
+    if (currentImage) {
+      historyStack.push(currentImage);
+      if (historyStack.length > maxHistory) historyStack.shift();
+    }
+    
+    // Clear forward stack (since we're going in a new direction)
+    forwardStack = [];
+    
+    currentImage = imageData;
     imgElement.src = imageData.url;
     imgElement.alt = `${imageData.subject} image`;
-    preloadForwardImages();
+    
+    // Reset image transform when showing new image
+    resetImageTransform();
     updateButtons();
   }
 
@@ -188,10 +233,11 @@
     }
   }
 
+  // Navigation handlers
   backBtn.addEventListener('click', () => {
     if (historyStack.length > 0) {
-      forwardStack.unshift(currentIndex);
-      if (forwardStack.length > maxPreload) forwardStack.pop();
+      forwardStack.unshift(currentImage);
+      if (forwardStack.length > maxHistory) forwardStack.pop();
       const prev = historyStack.pop();
       showImage(prev);
     }
@@ -199,22 +245,142 @@
 
   forwardBtn.addEventListener('click', () => {
     if (forwardStack.length > 0) {
-      historyStack.push(currentIndex);
+      historyStack.push(currentImage);
       if (historyStack.length > maxHistory) historyStack.shift();
       const next = forwardStack.shift();
       showImage(next);
     } else {
-      historyStack.push(currentIndex);
+      // If no forward history, get a new random image
+      historyStack.push(currentImage);
       if (historyStack.length > maxHistory) historyStack.shift();
       showRandomImage();
     }
   });
 
+  // Tool handlers
+  resetBtn.addEventListener('click', resetImageTransform);
+  
+  flipBtn.addEventListener('click', () => {
+    isFlipped = !isFlipped;
+    applyTransform();
+  });
+
+  // Mouse/touch events for panning
+  imageContainer.addEventListener('mousedown', (e) => {
+    if (scale <= 1) return;
+    isDragging = true;
+    startX = e.clientX;
+    startY = e.clientY;
+    startPosX = posX;
+    startPosY = posY;
+    imageContainer.style.cursor = 'grabbing';
+  });
+
+  document.addEventListener('mousemove', (e) => {
+    if (!isDragging) return;
+    const dx = e.clientX - startX;
+    const dy = e.clientY - startY;
+    posX = startPosX + dx;
+    posY = startPosY + dy;
+    applyTransform();
+  });
+
+  document.addEventListener('mouseup', () => {
+    isDragging = false;
+    imageContainer.style.cursor = 'grab';
+  });
+
+  // Touch events
+  imageContainer.addEventListener('touchstart', (e) => {
+    if (scale <= 1) return;
+    isDragging = true;
+    startX = e.touches[0].clientX;
+    startY = e.touches[0].clientY;
+    startPosX = posX;
+    startPosY = posY;
+    e.preventDefault();
+  });
+
+  document.addEventListener('touchmove', (e) => {
+    if (!isDragging) return;
+    const dx = e.touches[0].clientX - startX;
+    const dy = e.touches[0].clientY - startY;
+    posX = startPosX + dx;
+    posY = startPosY + dy;
+    applyTransform();
+    e.preventDefault();
+  });
+
+  document.addEventListener('touchend', () => {
+    isDragging = false;
+  });
+
+  // Zoom with mouse wheel
+  imageContainer.addEventListener('wheel', (e) => {
+    e.preventDefault();
+    const rect = imageContainer.getBoundingClientRect();
+    const mouseX = e.clientX - rect.left;
+    const mouseY = e.clientY - rect.top;
+    
+    const zoomIntensity = 0.1;
+    const wheelDelta = e.deltaY < 0 ? 1 : -1;
+    const newScale = Math.max(1, scale + wheelDelta * zoomIntensity * scale);
+    
+    // Calculate image position relative to the container
+    const imageX = (mouseX - posX) / scale;
+    const imageY = (mouseY - posY) / scale;
+    
+    // Calculate new position to zoom toward cursor
+    posX = mouseX - imageX * newScale;
+    posY = mouseY - imageY * newScale;
+    
+    scale = newScale;
+    applyTransform();
+  });
+
+  // Keyboard controls
   document.addEventListener('keydown', (event) => {
     if (event.key === 'ArrowLeft') backBtn.click();
     else if (event.key === 'ArrowRight') forwardBtn.click();
+    else if (event.key === '+' || event.key === '=') {
+      // Zoom in at center
+      const rect = imageContainer.getBoundingClientRect();
+      const centerX = rect.width / 2;
+      const centerY = rect.height / 2;
+      
+      const newScale = scale * 1.2;
+      const imageX = (centerX - posX) / scale;
+      const imageY = (centerY - posY) / scale;
+      
+      posX = centerX - imageX * newScale;
+      posY = centerY - imageY * newScale;
+      scale = newScale;
+      applyTransform();
+    }
+    else if (event.key === '-' || event.key === '_') {
+      // Zoom out at center
+      const rect = imageContainer.getBoundingClientRect();
+      const centerX = rect.width / 2;
+      const centerY = rect.height / 2;
+      
+      const newScale = Math.max(1, scale / 1.2);
+      const imageX = (centerX - posX) / scale;
+      const imageY = (centerY - posY) / scale;
+      
+      posX = centerX - imageX * newScale;
+      posY = centerY - imageY * newScale;
+      scale = newScale;
+      applyTransform();
+    }
+    else if (event.key === '0') {
+      resetImageTransform();
+    }
+    else if (event.key === 'f') {
+      flipBtn.click();
+    }
   });
 
+  // Initialize checkboxes
   checkboxes.forEach(cb => {
     cb.addEventListener('change', () => {
       loadSelectedSources();
