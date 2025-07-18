@@ -326,12 +326,30 @@
   }
 
   function showImage(imageData) {
-    imgElement.src = imageData.url;
-    imgElement.alt = `${imageData.subject} image`;
-    currentImage = imageData;
-    resetImagePosition();
-    preloadForwardImages();
-    updateButtons();
+      const testImg = new Image();
+      testImg.onload = function() {
+          // Check if image meets minimum size requirements
+          if (this.naturalWidth >= 400 && this.naturalHeight >= 400) {
+              // Image is large enough - display it
+              imgElement.src = imageData.url;
+              imgElement.alt = `${imageData.subject} image`;
+              currentImage = imageData;
+              resetImagePosition();
+              preloadForwardImages();
+              updateButtons();
+          } else {
+              // Image is too small - skip to next one
+              console.log(`Skipping small image (${this.naturalWidth}x${this.naturalHeight}px):`, imageData.url);
+              forwardStack = []; // Clear forward stack to prevent getting stuck
+              showRandomImage();
+          }
+      };
+      testImg.onerror = function() {
+          console.log('Error loading image:', imageData.url);
+          forwardStack = []; // Clear forward stack to prevent getting stuck
+          showRandomImage();
+      };
+      testImg.src = imageData.url;
   }
 
   function showRandomImage() {
