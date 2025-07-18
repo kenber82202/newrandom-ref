@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Random Image Navigator with History & Tools</title>
+  <title>Random Image Viewer</title>
   <style>
     html, body {
       margin: 0;
@@ -127,13 +127,11 @@
   const checkboxes = document.querySelectorAll('.toggles input[type="checkbox"]');
 
   let sourceLists = {};
-  let imageHistory = []; // [{subject, url}]
+  let imageHistory = [];
   let currentIndex = -1;
+  const maxHistory = 5;
 
-  let scale = 1;
-  let originX = 0;
-  let originY = 0;
-  let flipX = 1;
+  let scale = 1, originX = 0, originY = 0, flipX = 1;
   let isDragging = false;
   let startX = 0, startY = 0;
   let zoomKeyHeld = false;
@@ -142,8 +140,19 @@
     imgElement.style.transform = `translate(-50%, -50%) translate(${originX}px, ${originY}px) scale(${scale * flipX}, ${scale})`;
   }
 
-  function resetTransform() {
-    scale = 1;
+  function fitToScreen() {
+    const container = document.getElementById('container');
+    const cW = container.clientWidth;
+    const cH = container.clientHeight;
+    const imgW = imgElement.naturalWidth;
+    const imgH = imgElement.naturalHeight;
+
+    if (imgW && imgH) {
+      scale = Math.min(cW / imgW, cH / imgH);
+    } else {
+      scale = 1;
+    }
+
     originX = 0;
     originY = 0;
     flipX = 1;
@@ -195,7 +204,9 @@
   }
 
   function showImage(data) {
-    imgElement.onload = () => resetTransform();
+    imgElement.onload = () => {
+      fitToScreen();
+    };
     imgElement.src = data.url;
     imgElement.alt = `${data.subject} image`;
     updateNavButtons();
@@ -205,21 +216,19 @@
     const image = getRandomImageSource();
     if (!image) return;
 
-    // Cut off forward history if any
-    imageHistory = imageHistory.slice(0, currentIndex + 1);
-
-    // Append and update index
-    imageHistory.push(image);
-    currentIndex++;
-
-    // Trim back history if too long (max 5)
-    const maxHistory = 5;
-    if (imageHistory.length > maxHistory) {
-      imageHistory.shift();
-      currentIndex--;
+    // If we've moved back and then get a new image, truncate forward history
+    if (currentIndex < imageHistory.length - 1) {
+      imageHistory = imageHistory.slice(0, currentIndex + 1);
     }
 
-    showImage(image);
+    imageHistory.push(image);
+    if (imageHistory.length > maxHistory) {
+      imageHistory.shift();
+    } else {
+      currentIndex++;
+    }
+
+    showImage(imageHistory[currentIndex]);
   }
 
   backBtn.onclick = () => {
@@ -236,14 +245,13 @@
     }
   };
 
-  // Event listeners
   checkboxes.forEach(cb => cb.addEventListener('change', loadSelectedSources));
 
   document.addEventListener('keydown', e => {
     if (e.key === 'ArrowLeft') backBtn.click();
     else if (e.key === 'ArrowRight') forwardBtn.click();
     else if (e.key === 'f') { flipX *= -1; applyTransform(); }
-    else if (e.key === 'r') resetTransform();
+    else if (e.key === 'r') fitToScreen();
     else if (e.key === 'z') zoomKeyHeld = true;
     else if (e.key === 'Enter') showNewRandomImage();
   });
@@ -253,7 +261,7 @@
   });
 
   document.getElementById('flip').onclick = () => { flipX *= -1; applyTransform(); };
-  document.getElementById('reset').onclick = () => resetTransform();
+  document.getElementById('reset').onclick = () => fitToScreen();
 
   imgElement.addEventListener('mousedown', (e) => {
     e.preventDefault();
