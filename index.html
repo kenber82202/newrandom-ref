@@ -97,15 +97,23 @@
     .toggles input[type="checkbox"] {
       transform: scale(1.3);
     }
-    .zoom-indicator {
+    .top-controls {
       position: fixed;
-      bottom: 20px;
+      top: 60px;
       left: 50%;
       transform: translateX(-50%);
-      background: rgba(0,0,0,0.5);
-      padding: 5px 10px;
+      display: flex;
+      gap: 10px;
+      z-index: 1000;
+    }
+    .top-controls button {
+      padding: 8px 12px;
+      font-size: 1em;
+      background: rgba(30,30,30,0.8);
+      color: #fff;
+      border: none;
       border-radius: 5px;
-      font-size: 0.9em;
+      cursor: pointer;
     }
   </style>
 </head>
@@ -119,6 +127,11 @@
   <label><input type="checkbox" value="Walk">Walk</label>
 </div>
 
+<div class="top-controls">
+  <button id="resetBtn">Reset View</button>
+  <button id="flipBtn">Flip Horizontal</button>
+</div>
+
 <div class="image-container">
   <img id="mainImage" src="" alt="Random Image" draggable="false" />
 </div>
@@ -128,18 +141,15 @@
   <button id="forwardBtn" disabled aria-label="Next image">D</button>
 </div>
 
-<div class="zoom-indicator">
-  Zoom: 100% (W/S to zoom, A/D to navigate)
-</div>
-
 <script>
   const baseURL = 'https://f003.backblazeb2.com/file/links-ref/';
   const imgElement = document.getElementById('mainImage');
   const backBtn = document.getElementById('backBtn');
   const forwardBtn = document.getElementById('forwardBtn');
+  const resetBtn = document.getElementById('resetBtn');
+  const flipBtn = document.getElementById('flipBtn');
   const checkboxes = document.querySelectorAll('.toggles input[type="checkbox"]');
   const imageContainer = document.querySelector('.image-container');
-  const zoomIndicator = document.querySelector('.zoom-indicator');
 
   let sourceLists = {};
   let currentImage = null;
@@ -153,6 +163,7 @@
   let startPos = { x: 0, y: 0 };
   let translate = { x: 0, y: 0 };
   let scale = 1;
+  let isFlipped = false;
   const minScale = 0.5;
   const maxScale = 4;
   const scaleStep = 0.2;
@@ -218,13 +229,21 @@
   }
 
   function updateImageTransform() {
-    imgElement.style.transform = `translate(calc(-50% + ${translate.x}px), calc(-50% + ${translate.y}px)) scale(${scale})`;
-    zoomIndicator.textContent = `Zoom: ${Math.round(scale * 100)}% (W/S to zoom, A/D to navigate)`;
+    const flipValue = isFlipped ? -1 : 1;
+    imgElement.style.transform = `
+      translate(calc(-50% + ${translate.x}px), calc(-50% + ${translate.y}px)) 
+      scale(${scale * flipValue}, ${scale})
+    `;
   }
 
   function resetImagePosition() {
     translate = { x: 0, y: 0 };
     scale = 1;
+    updateImageTransform();
+  }
+
+  function flipHorizontal() {
+    isFlipped = !isFlipped;
     updateImageTransform();
   }
 
@@ -326,30 +345,27 @@
   }
 
   function showImage(imageData) {
-      const testImg = new Image();
-      testImg.onload = function() {
-          // Check if image meets minimum size requirements
-          if (this.naturalWidth >= 400 && this.naturalHeight >= 400) {
-              // Image is large enough - display it
-              imgElement.src = imageData.url;
-              imgElement.alt = `${imageData.subject} image`;
-              currentImage = imageData;
-              resetImagePosition();
-              preloadForwardImages();
-              updateButtons();
-          } else {
-              // Image is too small - skip to next one
-              console.log(`Skipping small image (${this.naturalWidth}x${this.naturalHeight}px):`, imageData.url);
-              forwardStack = []; // Clear forward stack to prevent getting stuck
-              showRandomImage();
-          }
-      };
-      testImg.onerror = function() {
-          console.log('Error loading image:', imageData.url);
-          forwardStack = []; // Clear forward stack to prevent getting stuck
-          showRandomImage();
-      };
-      testImg.src = imageData.url;
+    const testImg = new Image();
+    testImg.onload = function() {
+      if (this.naturalWidth >= 400 && this.naturalHeight >= 400) {
+        imgElement.src = imageData.url;
+        imgElement.alt = `${imageData.subject} image`;
+        currentImage = imageData;
+        resetImagePosition();
+        preloadForwardImages();
+        updateButtons();
+      } else {
+        console.log(`Skipping small image (${this.naturalWidth}x${this.naturalHeight}px):`, imageData.url);
+        forwardStack = [];
+        showRandomImage();
+      }
+    };
+    testImg.onerror = function() {
+      console.log('Error loading image:', imageData.url);
+      forwardStack = [];
+      showRandomImage();
+    };
+    testImg.src = imageData.url;
   }
 
   function showRandomImage() {
@@ -371,6 +387,14 @@
 
   forwardBtn.addEventListener('click', () => {
     navigateForward();
+  });
+
+  resetBtn.addEventListener('click', () => {
+    resetImagePosition();
+  });
+
+  flipBtn.addEventListener('click', () => {
+    flipHorizontal();
   });
 
   function navigateBack() {
@@ -401,10 +425,12 @@
   }
 
   document.addEventListener('keydown', (event) => {
-    // Prevent default for our keys
-    if (['a', 'd', 'w', 's'].includes(event.key.toLowerCase())) {
+    if (['a', 'd', 'w', 's', 'r', 'f'].includes(event.key.toLowerCase())) {
       event.preventDefault();
     }
+
+    const cursorX = event.clientX || window.innerWidth / 2;
+    const cursorY = event.clientY || window.innerHeight / 2;
 
     switch (event.key.toLowerCase()) {
       case 'a':
@@ -414,10 +440,16 @@
         navigateForward();
         break;
       case 'w':
-        zoomAtPosition('in', window.innerWidth / 2, window.innerHeight / 2);
+        zoomAtPosition('in', cursorX, cursorY);
         break;
       case 's':
-        zoomAtPosition('out', window.innerWidth / 2, window.innerHeight / 2);
+        zoomAtPosition('out', cursorX, cursorY);
+        break;
+      case 'r':
+        resetImagePosition();
+        break;
+      case 'f':
+        flipHorizontal();
         break;
     }
   });
@@ -428,6 +460,5 @@
     });
   });
 </script>
-
 </body>
 </html>
