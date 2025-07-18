@@ -100,11 +100,11 @@
   const forwardBtn = document.getElementById('forwardBtn');
   const checkboxes = document.querySelectorAll('.toggles input[type="checkbox"]');
 
-  let sourceLists = {}; // { People: [...], Anime: [...], ... }
+  let sourceLists = {};
   let currentImage = null;
   let historyStack = [];
   let forwardStack = [];
-  const maxHistory = 5; // Maximum number of images to keep in history
+  const maxHistory = 5;
 
   function updateButtons() {
     backBtn.disabled = historyStack.length === 0;
@@ -137,8 +137,8 @@
     for (const subject of selected) {
       sourceLists[subject] = await fetchLinksFor(subject);
     }
-    forwardStack = [];
     historyStack = [];
+    forwardStack = [];
     showRandomImage();
   }
 
