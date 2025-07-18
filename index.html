@@ -1,56 +1,37 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Random Image Navigator with Viewer Tools</title>
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
+  <meta charset="UTF-8" />
+  <title>Random Image Navigator</title>
   <style>
     html, body {
       margin: 0;
+      padding: 0;
+      height: 100%;
       background: #000;
       overflow: hidden;
-      font-family: sans-serif;
       color: #fff;
+      font-family: sans-serif;
     }
+
     #container {
       width: 100vw;
       height: 100vh;
       position: relative;
       overflow: hidden;
     }
+
     #mainImage {
       position: absolute;
-      top: 50%;
-      left: 50%;
-      transform-origin: top left;
       cursor: grab;
       user-select: none;
       -webkit-user-drag: none;
+      transform-origin: 0 0;
     }
-    .tools {
-      position: fixed;
-      bottom: 20px;
-      right: 20px;
-      z-index: 10;
-      display: flex;
-      gap: 10px;
-      background: rgba(0,0,0,0.5);
-      padding: 10px;
-      border-radius: 10px;
-    }
-    .tools button {
-      width: 40px;
-      height: 40px;
-      font-size: 16px;
-      border-radius: 50%;
-      border: none;
-      background: rgba(255,255,255,0.1);
-      color: white;
-      cursor: pointer;
-    }
-    .tools button:hover {
-      background: rgba(255,255,255,0.3);
-    }
+
     .toggles {
       position: fixed;
       top: 10px;
@@ -63,14 +44,71 @@
       display: flex;
       gap: 10px;
     }
+
     .toggles label {
       display: flex;
       align-items: center;
       gap: 5px;
       cursor: pointer;
     }
+
     .toggles input[type="checkbox"] {
       transform: scale(1.3);
+    }
+
+    button {
+      position: fixed;
+      bottom: 20px;
+      font-size: 3em;
+      padding: 0.1em 0.3em;
+      cursor: pointer;
+      border-radius: 5px;
+      border: none;
+      background: rgba(30,30,30,0.8);
+      color: #fff;
+      user-select: none;
+      transition: background 0.3s;
+      z-index: 1000;
+    }
+
+    button:disabled {
+      opacity: 0.3;
+      cursor: default;
+    }
+
+    button:hover:not(:disabled) {
+      background: rgba(70,70,70,0.9);
+    }
+
+    #backBtn {
+      left: 20px;
+    }
+
+    #forwardBtn {
+      right: 20px;
+    }
+
+    .tools {
+      position: fixed;
+      bottom: 20px;
+      right: 20px;
+      z-index: 10;
+      display: flex;
+      gap: 8px;
+      background: rgba(0,0,0,0.5);
+      padding: 8px 12px;
+      border-radius: 10px;
+    }
+
+    .tools button {
+      position: static;
+      font-size: 1.5em;
+      width: 40px;
+      height: 40px;
+      border-radius: 50%;
+      display: flex;
+      align-items: center;
+      justify-content: center;
     }
   </style>
 </head>
@@ -85,34 +123,46 @@
 </div>
 
 <div id="container">
-  <img id="mainImage" src="" alt="Random Image">
+  <img id="mainImage" src="" alt="Random Image" />
 </div>
 
 <div class="tools">
-  <button id="zoomBtn">Z</button>
-  <button id="flipBtn">F</button>
-  <button id="resetBtn">R</button>
-  <button id="backBtn">&lt;</button>
-  <button id="forwardBtn">&gt;</button>
+  <button id="zoomIn">+</button>
+  <button id="zoomOut">−</button>
+  <button id="flip">F</button>
+  <button id="reset">R</button>
 </div>
+
+<button id="backBtn" disabled aria-label="Previous image">&lt;</button>
+<button id="forwardBtn" disabled aria-label="Next image">&gt;</button>
 
 <script>
   const baseURL = 'https://f003.backblazeb2.com/file/links-ref/';
-  const img = document.getElementById('mainImage');
-  const checkboxes = document.querySelectorAll('.toggles input[type="checkbox"]');
+  const imgElement = document.getElementById('mainImage');
+  const container = document.getElementById('container');
   const backBtn = document.getElementById('backBtn');
   const forwardBtn = document.getElementById('forwardBtn');
-  const flipBtn = document.getElementById('flipBtn');
-  const resetBtn = document.getElementById('resetBtn');
-  const zoomBtn = document.getElementById('zoomBtn');
+  const checkboxes = document.querySelectorAll('.toggles input[type="checkbox"]');
+  const zoomInBtn = document.getElementById('zoomIn');
+  const zoomOutBtn = document.getElementById('zoomOut');
+  const flipBtn = document.getElementById('flip');
+  const resetBtn = document.getElementById('reset');
 
-  let sourceLists = {};
-  let currentIndex = null;
+  let sourceLists = {}; // { People: [...], Anime: [...], ... }
+  let currentIndex = -1;
   let historyStack = [];
   let forwardStack = [];
-  let scale = 1, originX = 0, originY = 0, flipX = 1;
-  let isDragging = false, startX = 0, startY = 0;
-  let zooming = false, zoomStartY = 0;
+  const maxHistory = 3;
+  const maxPreload = 3;
+
+  // Image transform state
+  let scale = 1;
+  let translateX = 0;
+  let translateY = 0;
+  let flipX = 1;
+  let isDragging = false;
+  let startX = 0;
+  let startY = 0;
 
   function updateButtons() {
     backBtn.disabled = historyStack.length === 0;
@@ -153,29 +203,69 @@
   function getRandomImageSource() {
     const subjects = Object.keys(sourceLists).filter(k => sourceLists[k].length > 0);
     if (subjects.length === 0) return null;
-    const chosen = subjects[Math.floor(Math.random() * subjects.length)];
-    const links = sourceLists[chosen];
-    const index = Math.floor(Math.random() * links.length);
-    return { subject: chosen, url: links[index] };
+    const chosenSubject = subjects[Math.floor(Math.random() * subjects.length)];
+    const links = sourceLists[chosenSubject];
+    const randomIndex = Math.floor(Math.random() * links.length);
+    return { subject: chosenSubject, url: links[randomIndex], index: randomIndex };
+  }
+
+  function preloadForwardImages() {
+    forwardStack = [];
+    let preloadCount = 0;
+    const subjects = Object.keys(sourceLists);
+
+    while (preloadCount < maxPreload) {
+      const image = getRandomImageSource();
+      if (!image) break;
+      const img = new Image();
+      img.onload = () => {
+        forwardStack.push(image);
+        updateButtons();
+      };
+      img.src = image.url;
+      preloadCount++;
+    }
   }
 
   function applyTransform() {
-    img.style.transform = `translate(-50%, -50%) translate(${originX}px, ${originY}px) scale(${scale * flipX}, ${scale})`;
+    imgElement.style.transform = `translate(${translateX}px, ${translateY}px) scale(${scale * flipX}, ${scale})`;
   }
 
   function resetTransform() {
     scale = 1;
-    originX = 0;
-    originY = 0;
+    translateX = 0;
+    translateY = 0;
     flipX = 1;
+    applyTransform();
+  }
+
+  function fitImageToScreen() {
+    if (!imgElement.complete || !imgElement.naturalWidth) return;
+
+    const containerWidth = container.clientWidth;
+    const containerHeight = container.clientHeight;
+    const imgWidth = imgElement.naturalWidth;
+    const imgHeight = imgElement.naturalHeight;
+
+    const widthRatio = containerWidth / imgWidth;
+    const heightRatio = containerHeight / imgHeight;
+    scale = Math.min(widthRatio, heightRatio);
+
+    // Center the image
+    translateX = (containerWidth - imgWidth * scale) / 2;
+    translateY = (containerHeight - imgHeight * scale) / 2;
+
     applyTransform();
   }
 
   function showImage(imageData) {
     currentIndex = imageData;
-    img.src = imageData.url;
-    img.alt = `${imageData.subject} image`;
-    resetTransform();
+    imgElement.onload = function() {
+      fitImageToScreen();
+    };
+    imgElement.src = imageData.url;
+    imgElement.alt = `${imageData.subject} image`;
+    preloadForwardImages();
     updateButtons();
   }
 
@@ -184,95 +274,140 @@
     if (image) {
       showImage(image);
     } else {
-      img.alt = "No images loaded.";
+      imgElement.alt = "No images loaded.";
     }
   }
 
-  backBtn.onclick = () => {
+  // Event listeners for navigation
+  backBtn.addEventListener('click', () => {
     if (historyStack.length > 0) {
       forwardStack.unshift(currentIndex);
-      if (forwardStack.length > 5) forwardStack.pop();
+      if (forwardStack.length > maxPreload) forwardStack.pop();
       const prev = historyStack.pop();
       showImage(prev);
     }
-  };
+  });
 
-  forwardBtn.onclick = () => {
+  forwardBtn.addEventListener('click', () => {
     if (forwardStack.length > 0) {
       historyStack.push(currentIndex);
-      if (historyStack.length > 5) historyStack.shift();
+      if (historyStack.length > maxHistory) historyStack.shift();
       const next = forwardStack.shift();
       showImage(next);
     } else {
       historyStack.push(currentIndex);
-      if (historyStack.length > 5) historyStack.shift();
+      if (historyStack.length > maxHistory) historyStack.shift();
       showRandomImage();
-    }
-  };
-
-  flipBtn.onclick = () => {
-    flipX *= -1;
-    applyTransform();
-  };
-
-  resetBtn.onclick = () => {
-    resetTransform();
-  };
-
-  img.ondragstart = () => false;
-
-  img.addEventListener('mousedown', (e) => {
-    if (zooming) {
-      zoomStartY = e.clientY;
-    } else {
-      isDragging = true;
-      startX = e.clientX;
-      startY = e.clientY;
-      img.style.cursor = 'grabbing';
     }
   });
 
+  // Event listeners for image manipulation
+  zoomInBtn.addEventListener('click', () => {
+    scale *= 1.2;
+    applyTransform();
+  });
+
+  zoomOutBtn.addEventListener('click', () => {
+    scale /= 1.2;
+    applyTransform();
+  });
+
+  flipBtn.addEventListener('click', () => {
+    flipX *= -1;
+    applyTransform();
+  });
+
+  resetBtn.addEventListener('click', () => {
+    fitImageToScreen();
+  });
+
+  // Mouse and touch events for panning
+  imgElement.addEventListener('mousedown', (e) => {
+    e.preventDefault();
+    isDragging = true;
+    startX = e.clientX - translateX;
+    startY = e.clientY - translateY;
+    imgElement.style.cursor = 'grabbing';
+  });
+
   window.addEventListener('mousemove', (e) => {
-    if (zooming) {
-      const deltaY = e.clientY - zoomStartY;
-      const factor = 1 + deltaY * 0.005;
-      scale *= factor;
-      zoomStartY = e.clientY;
-      applyTransform();
-    } else if (isDragging) {
-      const dx = (e.clientX - startX) / scale;
-      const dy = (e.clientY - startY) / scale;
-      originX += dx;
-      originY += dy;
-      startX = e.clientX;
-      startY = e.clientY;
-      applyTransform();
-    }
+    if (!isDragging) return;
+    translateX = e.clientX - startX;
+    translateY = e.clientY - startY;
+    applyTransform();
   });
 
   window.addEventListener('mouseup', () => {
     isDragging = false;
-    zooming = false;
-    img.style.cursor = 'grab';
+    imgElement.style.cursor = 'grab';
   });
 
-  document.addEventListener('keydown', (e) => {
-    if (e.key === 'ArrowLeft') backBtn.click();
-    if (e.key === 'ArrowRight') forwardBtn.click();
-    if (e.key.toLowerCase() === 'f') flipBtn.click();
-    if (e.key.toLowerCase() === 'r') resetBtn.click();
+  // Touch events for mobile
+  imgElement.addEventListener('touchstart', (e) => {
+    e.preventDefault();
+    if (e.touches.length === 1) {
+      isDragging = true;
+      startX = e.touches[0].clientX - translateX;
+      startY = e.touches[0].clientY - translateY;
+    }
   });
 
-  zoomBtn.addEventListener('mousedown', () => {
-    zooming = true;
+  window.addEventListener('touchmove', (e) => {
+    if (!isDragging || e.touches.length !== 1) return;
+    e.preventDefault();
+    translateX = e.touches[0].clientX - startX;
+    translateY = e.touches[0].clientY - startY;
+    applyTransform();
   });
 
-  zoomBtn.addEventListener('mouseup', () => {
-    zooming = false;
+  window.addEventListener('touchend', () => {
+    isDragging = false;
   });
 
-  checkboxes.forEach(cb => cb.addEventListener('change', loadSelectedSources));
+  // Zoom with mouse wheel
+  container.addEventListener('wheel', (e) => {
+    e.preventDefault();
+    const delta = e.deltaY < 0 ? 1.1 : 0.9;
+    
+    // Get mouse position relative to image
+    const rect = container.getBoundingClientRect();
+    const mouseX = e.clientX - rect.left;
+    const mouseY = e.clientY - rect.top;
+    
+    // Calculate image position
+    const imgX = (mouseX - translateX) / scale;
+    const imgY = (mouseY - translateY) / scale;
+    
+    // Apply zoom
+    scale *= delta;
+    
+    // Adjust position to zoom toward mouse
+    translateX = mouseX - imgX * scale;
+    translateY = mouseY - imgY * scale;
+    
+    applyTransform();
+  });
 
+  // Keyboard shortcuts
+  document.addEventListener('keydown', (event) => {
+    if (event.key === 'ArrowLeft') backBtn.click();
+    else if (event.key === 'ArrowRight') forwardBtn.click();
+    else if (event.key === 'f' || event.key === 'F') flipBtn.click();
+    else if (event.key === 'r' || event.key === 'R') resetBtn.click();
+    else if (event.key === '+' || event.key === '=') zoomInBtn.click();
+    else if (event.key === '-' || event.key === '_') zoomOutBtn.click();
+  });
+
+  // Category selection
+  checkboxes.forEach(cb => {
+    cb.addEventListener('change', () => {
+      loadSelectedSources();
+    });
+  });
+
+  // Initialize
+  imgElement.style.cursor = 'grab';
 </script>
+
 </body>
 </html>
