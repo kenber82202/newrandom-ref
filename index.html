@@ -80,16 +80,17 @@
       right: 20px;
       z-index: 1002;
       display: flex;
+      flex-direction: column;
       gap: 8px;
       background: rgba(0,0,0,0.4);
-      padding: 6px 10px;
-      border-radius: 10px;
+      padding: 10px;
+      border-radius: 12px;
     }
 
     .tools button {
-      width: 36px;
-      height: 36px;
-      font-size: 1em;
+      width: 40px;
+      height: 40px;
+      font-size: 1.1em;
       border-radius: 50%;
       border: none;
       background: rgba(255,255,255,0.1);
@@ -113,12 +114,14 @@
   <label><input type="checkbox" value="Walk">Walk</label>
 </div>
 
-<img id="mainImage" src="" alt="Image Viewer" />
+<img id="mainImage" src="" alt="Image Viewer" draggable="false" />
 
 <button id="backBtn" disabled>&lt;</button>
 <button id="forwardBtn" disabled>&gt;</button>
 
 <div class="tools">
+  <button id="zoomInBtn">+</button>
+  <button id="zoomOutBtn">−</button>
   <button id="flipBtn">F</button>
   <button id="resetBtn">R</button>
 </div>
@@ -130,6 +133,8 @@
   const forwardBtn = document.getElementById('forwardBtn');
   const flipBtn = document.getElementById('flipBtn');
   const resetBtn = document.getElementById('resetBtn');
+  const zoomInBtn = document.getElementById('zoomInBtn');
+  const zoomOutBtn = document.getElementById('zoomOutBtn');
   const checkboxes = document.querySelectorAll('.toggles input[type="checkbox"]');
 
   let sourceLists = {};
@@ -147,6 +152,9 @@
   let isDragging = false;
   let startX = 0;
   let startY = 0;
+
+  // Prevent browser's native drag image
+  img.ondragstart = () => false;
 
   function updateButtons() {
     backBtn.disabled = historyStack.length === 0;
@@ -264,6 +272,14 @@
   checkboxes.forEach(cb => cb.addEventListener('change', loadSelectedSources));
   flipBtn.addEventListener("click", () => { flip = !flip; applyTransform(); });
   resetBtn.addEventListener("click", resetView);
+  zoomInBtn.addEventListener("click", () => {
+    scale *= 1.1;
+    applyTransform();
+  });
+  zoomOutBtn.addEventListener("click", () => {
+    scale /= 1.1;
+    applyTransform();
+  });
 
   // Improved drag-to-pan
   img.addEventListener("mousedown", (e) => {
@@ -297,7 +313,7 @@
     img.style.cursor = "grab";
   });
 
-  // Touch support for pan
+  // Touch support
   img.addEventListener("touchstart", (e) => {
     if (e.touches.length === 1) {
       isDragging = true;
@@ -345,6 +361,8 @@
   document.addEventListener('keydown', (event) => {
     if (event.key === 'ArrowLeft') backBtn.click();
     else if (event.key === 'ArrowRight') forwardBtn.click();
+    else if (event.key === '+') zoomInBtn.click();
+    else if (event.key === '-') zoomOutBtn.click();
   });
 </script>
 
