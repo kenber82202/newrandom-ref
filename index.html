@@ -1,8 +1,11 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-  <meta charset="UTF-8">
-  <title>Image Viewer</title>
+  <meta charset="UTF-8" />
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
+  <title>Random Image Navigator</title>
   <style>
     html, body {
       margin: 0;
@@ -20,7 +23,7 @@
       overflow: hidden;
     }
 
-    img {
+    #mainImage {
       position: absolute;
       top: 50%;
       left: 50%;
@@ -28,6 +31,32 @@
       cursor: grab;
       user-select: none;
       -webkit-user-drag: none;
+      border: 3px solid #fff;
+      border-radius: 8px;
+    }
+
+    .toggles {
+      position: fixed;
+      top: 10px;
+      left: 50%;
+      transform: translateX(-50%);
+      background: rgba(0,0,0,0.5);
+      padding: 10px 15px;
+      border-radius: 10px;
+      z-index: 1001;
+      display: flex;
+      gap: 10px;
+    }
+
+    .toggles label {
+      display: flex;
+      align-items: center;
+      gap: 5px;
+      cursor: pointer;
+    }
+
+    .toggles input[type="checkbox"] {
+      transform: scale(1.3);
     }
 
     .tools {
@@ -42,7 +71,7 @@
       border-radius: 10px;
     }
 
-    .tools button {
+    .tools button, button#backBtn, button#forwardBtn {
       width: 40px;
       height: 40px;
       font-size: 18px;
@@ -52,173 +81,240 @@
       color: white;
       font-weight: bold;
       cursor: pointer;
+      z-index: 1000;
     }
 
-    .tools button:hover {
+    .tools button:hover,
+    button#backBtn:hover,
+    button#forwardBtn:hover {
       background: rgba(255,255,255,0.3);
     }
 
-    #categories {
+    #backBtn {
       position: fixed;
-      top: 10px;
-      left: 10px;
-      z-index: 20;
-      background: rgba(0,0,0,0.5);
-      padding: 10px;
-      border-radius: 10px;
-      max-height: 90vh;
-      overflow-y: auto;
+      bottom: 20px;
+      left: 20px;
+    }
+
+    #forwardBtn {
+      position: fixed;
+      bottom: 20px;
+      left: 80px;
     }
   </style>
 </head>
 <body>
-  <div id="categories"></div>
-  <div id="container">
-    <img id="viewer" src="" alt="Image">
-  </div>
 
-  <div class="tools">
-    <button id="zoomIn">+</button>
-    <button id="zoomOut">−</button>
-    <button id="flip">F</button>
-    <button id="reset">R</button>
-    <button id="back">⟵</button>
-    <button id="next">⟶</button>
-  </div>
+<div class="toggles">
+  <label><input type="checkbox" value="People">People</label>
+  <label><input type="checkbox" value="PeoplePlus">PeoplePlus</label>
+  <label><input type="checkbox" value="Anime">Anime</label>
+  <label><input type="checkbox" value="Places">Places</label>
+  <label><input type="checkbox" value="Walk">Walk</label>
+</div>
 
-  <script>
-    const viewer = document.getElementById('viewer');
-    const container = document.getElementById('container');
-    const categoriesDiv = document.getElementById('categories');
-    const historyStack = [];
-    const forwardStack = [];
-    let currentImage = null;
+<div id="container">
+  <img id="mainImage" src="" alt="Random Image" />
+</div>
 
-    let allImages = {};
-    const categoryList = ['Panel', 'Scene', 'Sketch']; // Replace with real category names
+<div class="tools">
+  <button id="zoomIn">+</button>
+  <button id="zoomOut">−</button>
+  <button id="flip">F</button>
+  <button id="reset">R</button>
+</div>
 
-    let scale = 1;
-    let originX = 0;
-    let originY = 0;
-    let isDragging = false;
-    let startX = 0;
-    let startY = 0;
-    let flipX = 1;
+<button id="backBtn" disabled aria-label="Previous image">&lt;</button>
+<button id="forwardBtn" disabled aria-label="Next image">&gt;</button>
 
-    function applyTransform() {
-      viewer.style.transform = `translate(-50%, -50%) translate(${originX}px, ${originY}px) scale(${scale * flipX}, ${scale})`;
+<script>
+  const baseURL = 'https://f003.backblazeb2.com/file/links-ref/';
+  const imgElement = document.getElementById('mainImage');
+  const backBtn = document.getElementById('backBtn');
+  const forwardBtn = document.getElementById('forwardBtn');
+  const checkboxes = document.querySelectorAll('.toggles input[type="checkbox"]');
+
+  let sourceLists = {};
+  let currentIndex = -1;
+  let historyStack = [];
+  let forwardStack = [];
+  const maxHistory = 3;
+  const maxPreload = 3;
+
+  let scale = 1;
+  let originX = 0;
+  let originY = 0;
+  let isDragging = false;
+  let startX = 0;
+  let startY = 0;
+  let flipX = 1;
+
+  function applyTransform() {
+    imgElement.style.transform = `translate(-50%, -50%) translate(${originX}px, ${originY}px) scale(${scale * flipX}, ${scale})`;
+  }
+
+  function resetTransform() {
+    scale = 1;
+    originX = 0;
+    originY = 0;
+    flipX = 1;
+    applyTransform();
+  }
+
+  function updateButtons() {
+    backBtn.disabled = historyStack.length === 0;
+    forwardBtn.disabled = forwardStack.length === 0;
+  }
+
+  function getSelectedSources() {
+    return [...checkboxes].filter(cb => cb.checked).map(cb => cb.value);
+  }
+
+  async function fetchLinksFor(subject) {
+    const url = `${baseURL}${subject}.txt`;
+    try {
+      const response = await fetch(url);
+      const text = await response.text();
+      return text.trim().split('\n').filter(Boolean);
+    } catch (err) {
+      console.error(`Failed to fetch ${subject}:`, err);
+      return [];
     }
+  }
 
-    function resetTransform() {
-      scale = 1;
-      originX = 0;
-      originY = 0;
-      flipX = 1;
-      applyTransform();
+  async function loadSelectedSources() {
+    const selected = getSelectedSources();
+    if (selected.length === 0) {
+      alert("Please select at least one subject.");
+      return;
     }
+    sourceLists = {};
+    for (const subject of selected) {
+      sourceLists[subject] = await fetchLinksFor(subject);
+    }
+    forwardStack = [];
+    historyStack = [];
+    showRandomImage();
+  }
 
-    viewer.ondragstart = () => false;
+  function getRandomImageSource() {
+    const subjects = Object.keys(sourceLists).filter(k => sourceLists[k].length > 0);
+    if (subjects.length === 0) return null;
+    const chosenSubject = subjects[Math.floor(Math.random() * subjects.length)];
+    const links = sourceLists[chosenSubject];
+    const randomIndex = Math.floor(Math.random() * links.length);
+    return { subject: chosenSubject, url: links[randomIndex], index: randomIndex };
+  }
 
-    viewer.addEventListener('mousedown', (e) => {
-      e.preventDefault();
-      isDragging = true;
-      startX = e.clientX;
-      startY = e.clientY;
-      viewer.style.cursor = 'grabbing';
+  function preloadForwardImages() {
+    forwardStack = [];
+    let preloadCount = 0;
+    const subjects = Object.keys(sourceLists);
+
+    while (preloadCount < maxPreload) {
+      const image = getRandomImageSource();
+      if (!image) break;
+      const img = new Image();
+      img.onload = () => {
+        forwardStack.push(image);
+        updateButtons();
+      };
+      img.src = image.url;
+      preloadCount++;
+    }
+  }
+
+  function showImage(imageData) {
+    currentIndex = imageData;
+    imgElement.src = imageData.url;
+    imgElement.alt = `${imageData.subject} image`;
+    resetTransform();
+    preloadForwardImages();
+    updateButtons();
+  }
+
+  function showRandomImage() {
+    const image = getRandomImageSource();
+    if (image) {
+      showImage(image);
+    } else {
+      imgElement.alt = "No images loaded.";
+    }
+  }
+
+  backBtn.addEventListener('click', () => {
+    if (historyStack.length > 0) {
+      forwardStack.unshift(currentIndex);
+      if (forwardStack.length > maxPreload) forwardStack.pop();
+      const prev = historyStack.pop();
+      showImage(prev);
+    }
+  });
+
+  forwardBtn.addEventListener('click', () => {
+    if (forwardStack.length > 0) {
+      historyStack.push(currentIndex);
+      if (historyStack.length > maxHistory) historyStack.shift();
+      const next = forwardStack.shift();
+      showImage(next);
+    } else {
+      historyStack.push(currentIndex);
+      if (historyStack.length > maxHistory) historyStack.shift();
+      showRandomImage();
+    }
+  });
+
+  document.addEventListener('keydown', (event) => {
+    if (event.key === 'ArrowLeft') backBtn.click();
+    else if (event.key === 'ArrowRight') forwardBtn.click();
+    else if (event.key === 'f') flipX *= -1, applyTransform();
+    else if (event.key === 'r') resetTransform();
+  });
+
+  checkboxes.forEach(cb => {
+    cb.addEventListener('change', () => {
+      loadSelectedSources();
     });
+  });
 
-    window.addEventListener('mousemove', (e) => {
-      if (!isDragging) return;
-      const dx = (e.clientX - startX) / scale;
-      const dy = (e.clientY - startY) / scale;
-      originX += dx;
-      originY += dy;
-      startX = e.clientX;
-      startY = e.clientY;
-      applyTransform();
-    });
+  // Pan logic
+  imgElement.addEventListener('mousedown', (e) => {
+    e.preventDefault();
+    isDragging = true;
+    startX = e.clientX;
+    startY = e.clientY;
+    imgElement.style.cursor = 'grabbing';
+  });
 
-    window.addEventListener('mouseup', () => {
-      isDragging = false;
-      viewer.style.cursor = 'grab';
-    });
+  window.addEventListener('mousemove', (e) => {
+    if (!isDragging) return;
+    const dx = (e.clientX - startX) / scale;
+    const dy = (e.clientY - startY) / scale;
+    originX += dx;
+    originY += dy;
+    startX = e.clientX;
+    startY = e.clientY;
+    applyTransform();
+  });
 
-    container.addEventListener('wheel', (e) => {
-      e.preventDefault();
-      const delta = e.deltaY < 0 ? 1.1 : 0.9;
-      scale *= delta;
-      applyTransform();
-    });
+  window.addEventListener('mouseup', () => {
+    isDragging = false;
+    imgElement.style.cursor = 'grab';
+  });
 
-    function loadImage(src) {
-      if (currentImage) historyStack.push(currentImage);
-      currentImage = src;
-      viewer.src = src;
-      resetTransform();
-    }
+  document.getElementById('zoomIn').onclick = () => { scale *= 1.2; applyTransform(); };
+  document.getElementById('zoomOut').onclick = () => { scale /= 1.2; applyTransform(); };
+  document.getElementById('flip').onclick = () => { flipX *= -1; applyTransform(); };
+  document.getElementById('reset').onclick = () => resetTransform();
 
-    document.getElementById('zoomIn').onclick = () => { scale *= 1.2; applyTransform(); };
-    document.getElementById('zoomOut').onclick = () => { scale /= 1.2; applyTransform(); };
-    document.getElementById('flip').onclick = () => { flipX *= -1; applyTransform(); };
-    document.getElementById('reset').onclick = () => resetTransform();
-    document.getElementById('back').onclick = () => {
-      if (historyStack.length) {
-        forwardStack.push(currentImage);
-        currentImage = historyStack.pop();
-        viewer.src = currentImage;
-        resetTransform();
-      }
-    };
-    document.getElementById('next').onclick = () => {
-      if (forwardStack.length) {
-        historyStack.push(currentImage);
-        currentImage = forwardStack.pop();
-        viewer.src = currentImage;
-        resetTransform();
-      }
-    };
+  document.getElementById('container').addEventListener('wheel', (e) => {
+    e.preventDefault();
+    const delta = e.deltaY < 0 ? 1.1 : 0.9;
+    scale *= delta;
+    applyTransform();
+  });
 
-    async function fetchImages(category) {
-      // Replace with real logic
-      return Array.from({length: 10}, (_, i) => `https://picsum.photos/seed/${category}-${i}/800/600`);
-    }
+</script>
 
-    async function init() {
-      for (const category of categoryList) {
-        allImages[category] = await fetchImages(category);
-        const label = document.createElement('label');
-        label.style.display = 'block';
-        const checkbox = document.createElement('input');
-        checkbox.type = 'checkbox';
-        checkbox.checked = true;
-        checkbox.dataset.category = category;
-        label.appendChild(checkbox);
-        label.append(` ${category}`);
-        categoriesDiv.appendChild(label);
-      }
-
-      document.addEventListener('keydown', (e) => {
-        if (e.key === 'f') document.getElementById('flip').click();
-        if (e.key === 'r') document.getElementById('reset').click();
-        if (e.key === 'ArrowLeft') document.getElementById('back').click();
-        if (e.key === 'ArrowRight') document.getElementById('next').click();
-        if (e.key === 'Enter') showRandom();
-      });
-
-      showRandom();
-    }
-
-    function showRandom() {
-      const enabledCategories = Array.from(categoriesDiv.querySelectorAll('input:checked'))
-        .map(cb => cb.dataset.category);
-      const pool = enabledCategories.flatMap(cat => allImages[cat]);
-      if (pool.length) {
-        const pick = pool[Math.floor(Math.random() * pool.length)];
-        loadImage(pick);
-      }
-    }
-
-    init();
-  </script>
 </body>
 </html>
