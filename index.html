@@ -2,10 +2,8 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8" />
-  <meta name="apple-mobile-web-app-capable" content="yes">
-  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
-  <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
-  <title>Random Image Navigator</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Random Image Navigator with History & Tools</title>
   <style>
     html, body {
       margin: 0;
@@ -59,11 +57,14 @@
       transform: scale(1.3);
     }
 
-    .tools {
+    .tools, #backBtn, #forwardBtn {
       position: fixed;
       bottom: 20px;
+      z-index: 1000;
+    }
+
+    .tools {
       right: 20px;
-      z-index: 10;
       display: flex;
       gap: 8px;
       background: rgba(0,0,0,0.5);
@@ -71,7 +72,7 @@
       border-radius: 10px;
     }
 
-    .tools button, button#backBtn, button#forwardBtn {
+    .tools button, #backBtn, #forwardBtn {
       width: 40px;
       height: 40px;
       font-size: 18px;
@@ -81,24 +82,17 @@
       color: white;
       font-weight: bold;
       cursor: pointer;
-      z-index: 1000;
     }
 
-    .tools button:hover,
-    button#backBtn:hover,
-    button#forwardBtn:hover {
+    .tools button:hover, #backBtn:hover, #forwardBtn:hover {
       background: rgba(255,255,255,0.3);
     }
 
     #backBtn {
-      position: fixed;
-      bottom: 20px;
       left: 20px;
     }
 
     #forwardBtn {
-      position: fixed;
-      bottom: 20px;
       left: 80px;
     }
   </style>
@@ -118,14 +112,12 @@
 </div>
 
 <div class="tools">
-  <button id="zoomIn">+</button>
-  <button id="zoomOut">−</button>
   <button id="flip">F</button>
   <button id="reset">R</button>
 </div>
 
-<button id="backBtn" disabled aria-label="Previous image">&lt;</button>
-<button id="forwardBtn" disabled aria-label="Next image">&gt;</button>
+<button id="backBtn" disabled>&lt;</button>
+<button id="forwardBtn" disabled>&gt;</button>
 
 <script>
   const baseURL = 'https://f003.backblazeb2.com/file/links-ref/';
@@ -135,19 +127,15 @@
   const checkboxes = document.querySelectorAll('.toggles input[type="checkbox"]');
 
   let sourceLists = {};
+  let imageHistory = []; // [{subject, url}]
   let currentIndex = -1;
-  let historyStack = [];
-  let forwardStack = [];
-  const maxHistory = 3;
-  const maxPreload = 3;
 
   let scale = 1;
   let originX = 0;
   let originY = 0;
-  let isDragging = false;
-  let startX = 0;
-  let startY = 0;
   let flipX = 1;
+  let isDragging = false;
+  let startX = 0, startY = 0;
   let zoomKeyHeld = false;
 
   function applyTransform() {
@@ -162,9 +150,9 @@
     applyTransform();
   }
 
-  function updateButtons() {
-    backBtn.disabled = historyStack.length === 0;
-    forwardBtn.disabled = forwardStack.length === 0;
+  function updateNavButtons() {
+    backBtn.disabled = currentIndex <= 0;
+    forwardBtn.disabled = currentIndex >= imageHistory.length - 1;
   }
 
   function getSelectedSources() {
@@ -172,13 +160,12 @@
   }
 
   async function fetchLinksFor(subject) {
-    const url = `${baseURL}${subject}.txt`;
     try {
-      const response = await fetch(url);
-      const text = await response.text();
+      const res = await fetch(`${baseURL}${subject}.txt`);
+      const text = await res.text();
       return text.trim().split('\n').filter(Boolean);
     } catch (err) {
-      console.error(`Failed to fetch ${subject}:`, err);
+      console.error(`Error fetching ${subject}`, err);
       return [];
     }
   }
@@ -190,108 +177,88 @@
       return;
     }
     sourceLists = {};
-    for (const subject of selected) {
+    for (let subject of selected) {
       sourceLists[subject] = await fetchLinksFor(subject);
     }
-    forwardStack = [];
-    historyStack = [];
-    showRandomImage();
+    imageHistory = [];
+    currentIndex = -1;
+    showNewRandomImage();
   }
 
   function getRandomImageSource() {
-    const subjects = Object.keys(sourceLists).filter(k => sourceLists[k].length > 0);
-    if (subjects.length === 0) return null;
-    const chosenSubject = subjects[Math.floor(Math.random() * subjects.length)];
-    const links = sourceLists[chosenSubject];
-    const randomIndex = Math.floor(Math.random() * links.length);
-    return { subject: chosenSubject, url: links[randomIndex], index: randomIndex };
+    const subjects = Object.keys(sourceLists).filter(k => sourceLists[k].length);
+    if (!subjects.length) return null;
+    const subject = subjects[Math.floor(Math.random() * subjects.length)];
+    const list = sourceLists[subject];
+    const url = list[Math.floor(Math.random() * list.length)];
+    return { subject, url };
   }
 
-  function preloadForwardImages() {
-    forwardStack = [];
-    let preloadCount = 0;
-    const subjects = Object.keys(sourceLists);
-
-    while (preloadCount < maxPreload) {
-      const image = getRandomImageSource();
-      if (!image) break;
-      const img = new Image();
-      img.onload = () => {
-        forwardStack.push(image);
-        updateButtons();
-      };
-      img.src = image.url;
-      preloadCount++;
-    }
-  }
-
-  function showImage(imageData) {
-    currentIndex = imageData;
+  function showImage(data) {
     imgElement.onload = () => resetTransform();
-    imgElement.src = imageData.url;
-    imgElement.alt = `${imageData.subject} image`;
-    preloadForwardImages();
-    updateButtons();
+    imgElement.src = data.url;
+    imgElement.alt = `${data.subject} image`;
+    updateNavButtons();
   }
 
-  function showRandomImage() {
+  function showNewRandomImage() {
     const image = getRandomImageSource();
-    if (image) {
-      showImage(image);
-    } else {
-      imgElement.alt = "No images loaded.";
+    if (!image) return;
+
+    // Cut off forward history if any
+    imageHistory = imageHistory.slice(0, currentIndex + 1);
+
+    // Append and update index
+    imageHistory.push(image);
+    currentIndex++;
+
+    // Trim back history if too long (max 5)
+    const maxHistory = 5;
+    if (imageHistory.length > maxHistory) {
+      imageHistory.shift();
+      currentIndex--;
     }
+
+    showImage(image);
   }
 
-  backBtn.addEventListener('click', () => {
-    if (historyStack.length > 0) {
-      forwardStack.unshift(currentIndex);
-      if (forwardStack.length > maxPreload) forwardStack.pop();
-      const prev = historyStack.pop();
-      showImage(prev);
+  backBtn.onclick = () => {
+    if (currentIndex > 0) {
+      currentIndex--;
+      showImage(imageHistory[currentIndex]);
     }
-  });
+  };
 
-  forwardBtn.addEventListener('click', () => {
-    if (forwardStack.length > 0) {
-      historyStack.push(currentIndex);
-      if (historyStack.length > maxHistory) historyStack.shift();
-      const next = forwardStack.shift();
-      showImage(next);
-    } else {
-      historyStack.push(currentIndex);
-      if (historyStack.length > maxHistory) historyStack.shift();
-      showRandomImage();
+  forwardBtn.onclick = () => {
+    if (currentIndex < imageHistory.length - 1) {
+      currentIndex++;
+      showImage(imageHistory[currentIndex]);
     }
+  };
+
+  // Event listeners
+  checkboxes.forEach(cb => cb.addEventListener('change', loadSelectedSources));
+
+  document.addEventListener('keydown', e => {
+    if (e.key === 'ArrowLeft') backBtn.click();
+    else if (e.key === 'ArrowRight') forwardBtn.click();
+    else if (e.key === 'f') { flipX *= -1; applyTransform(); }
+    else if (e.key === 'r') resetTransform();
+    else if (e.key === 'z') zoomKeyHeld = true;
+    else if (e.key === 'Enter') showNewRandomImage();
   });
 
-  document.addEventListener('keydown', (event) => {
-    if (event.key === 'ArrowLeft') backBtn.click();
-    else if (event.key === 'ArrowRight') forwardBtn.click();
-    else if (event.key === 'f') flipX *= -1, applyTransform();
-    else if (event.key === 'r') resetTransform();
-    else if (event.key === 'z') zoomKeyHeld = true;
+  document.addEventListener('keyup', e => {
+    if (e.key === 'z') zoomKeyHeld = false;
   });
 
-  document.addEventListener('keyup', (event) => {
-    if (event.key === 'z') zoomKeyHeld = false;
-  });
+  document.getElementById('flip').onclick = () => { flipX *= -1; applyTransform(); };
+  document.getElementById('reset').onclick = () => resetTransform();
 
-  checkboxes.forEach(cb => {
-    cb.addEventListener('change', () => {
-      loadSelectedSources();
-    });
-  });
-
-  // Zoom with Z + mouse down/up
   imgElement.addEventListener('mousedown', (e) => {
     e.preventDefault();
     if (zoomKeyHeld) {
-      if (e.button === 0) {
-        scale *= 1.2;
-      } else {
-        scale /= 1.2;
-      }
+      scale *= (e.button === 0) ? 1.2 : 0.8;
       applyTransform();
     } else {
       isDragging = true;
@@ -317,16 +284,13 @@
     imgElement.style.cursor = 'grab';
   });
 
-  document.getElementById('zoomIn').onclick = () => { scale *= 1.2; applyTransform(); };
-  document.getElementById('zoomOut').onclick = () => { scale /= 1.2; applyTransform(); };
-  document.getElementById('flip').onclick = () => { flipX *= -1; applyTransform(); };
-  document.getElementById('reset').onclick = () => resetTransform();
-
   document.getElementById('container').addEventListener('wheel', (e) => {
     e.preventDefault();
     const delta = e.deltaY < 0 ? 1.1 : 0.9;
     scale *= delta;
     applyTransform();
   });
-
 </script>
+
+</body>
+</html>
