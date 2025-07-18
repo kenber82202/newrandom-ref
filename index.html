@@ -25,14 +25,19 @@
       width: 100vw;
       height: 100vh;
       overflow: hidden;
+      display: flex;
+      align-items: center;
+      justify-content: center;
     }
     img {
-      position: absolute;
-      max-width: none;
-      transform-origin: 0 0;
+      max-width: 100%;
+      max-height: 100%;
+      transform-origin: center center;
       transition: transform 0.1s;
       border: 3px solid #fff;
       border-radius: 8px;
+      user-select: none;
+      -webkit-user-drag: none;
     }
     button {
       position: fixed;
@@ -135,6 +140,7 @@
   let historyStack = [];
   let forwardStack = [];
   const maxHistory = 5;
+  const maxPreload = 3;
   
   // Image transform state
   let scale = 1;
@@ -189,6 +195,27 @@
     return { subject: chosenSubject, url: links[randomIndex], index: randomIndex };
   }
 
+  function preloadForwardImages() {
+    // Clear existing forward stack
+    forwardStack = [];
+    
+    // Preload new images
+    let preloadCount = 0;
+    while (preloadCount < maxPreload) {
+      const image = getRandomImageSource();
+      if (!image) break;
+      
+      // Create new image to preload
+      const img = new Image();
+      img.onload = () => {
+        forwardStack.push(image);
+        updateButtons();
+      };
+      img.src = image.url;
+      preloadCount++;
+    }
+  }
+
   function resetImageTransform() {
     scale = 1;
     posX = 0;
@@ -212,15 +239,15 @@
       if (historyStack.length > maxHistory) historyStack.shift();
     }
     
-    // Clear forward stack (since we're going in a new direction)
-    forwardStack = [];
-    
     currentImage = imageData;
     imgElement.src = imageData.url;
     imgElement.alt = `${imageData.subject} image`;
     
     // Reset image transform when showing new image
     resetImageTransform();
+    
+    // Preload next images
+    preloadForwardImages();
     updateButtons();
   }
 
@@ -236,8 +263,11 @@
   // Navigation handlers
   backBtn.addEventListener('click', () => {
     if (historyStack.length > 0) {
+      // Move current image to forward stack
       forwardStack.unshift(currentImage);
-      if (forwardStack.length > maxHistory) forwardStack.pop();
+      if (forwardStack.length > maxPreload) forwardStack.pop();
+      
+      // Get previous image from history
       const prev = historyStack.pop();
       showImage(prev);
     }
@@ -245,10 +275,18 @@
 
   forwardBtn.addEventListener('click', () => {
     if (forwardStack.length > 0) {
+      // Add current image to history
       historyStack.push(currentImage);
       if (historyStack.length > maxHistory) historyStack.shift();
+      
+      // Get next image from forward stack
       const next = forwardStack.shift();
       showImage(next);
+      
+      // Keep preloading if we're running low
+      if (forwardStack.length < 2) {
+        preloadForwardImages();
+      }
     } else {
       // If no forward history, get a new random image
       historyStack.push(currentImage);
@@ -265,15 +303,16 @@
     applyTransform();
   });
 
-  // Mouse/touch events for panning
-  imageContainer.addEventListener('mousedown', (e) => {
+  // Mouse events for panning
+  imgElement.addEventListener('mousedown', (e) => {
     if (scale <= 1) return;
     isDragging = true;
     startX = e.clientX;
     startY = e.clientY;
     startPosX = posX;
     startPosY = posY;
-    imageContainer.style.cursor = 'grabbing';
+    imgElement.style.cursor = 'grabbing';
+    e.preventDefault(); // Prevent default drag behavior
   });
 
   document.addEventListener('mousemove', (e) => {
@@ -283,15 +322,16 @@
     posX = startPosX + dx;
     posY = startPosY + dy;
     applyTransform();
+    e.preventDefault(); // Prevent text selection while dragging
   });
 
   document.addEventListener('mouseup', () => {
     isDragging = false;
-    imageContainer.style.cursor = 'grab';
+    imgElement.style.cursor = 'grab';
   });
 
   // Touch events
-  imageContainer.addEventListener('touchstart', (e) => {
+  imgElement.addEventListener('touchstart', (e) => {
     if (scale <= 1) return;
     isDragging = true;
     startX = e.touches[0].clientX;
@@ -316,9 +356,9 @@
   });
 
   // Zoom with mouse wheel
-  imageContainer.addEventListener('wheel', (e) => {
+  imgElement.addEventListener('wheel', (e) => {
     e.preventDefault();
-    const rect = imageContainer.getBoundingClientRect();
+    const rect = imgElement.getBoundingClientRect();
     const mouseX = e.clientX - rect.left;
     const mouseY = e.clientY - rect.top;
     
@@ -344,7 +384,7 @@
     else if (event.key === 'ArrowRight') forwardBtn.click();
     else if (event.key === '+' || event.key === '=') {
       // Zoom in at center
-      const rect = imageContainer.getBoundingClientRect();
+      const rect = imgElement.getBoundingClientRect();
       const centerX = rect.width / 2;
       const centerY = rect.height / 2;
       
@@ -359,7 +399,7 @@
     }
     else if (event.key === '-' || event.key === '_') {
       // Zoom out at center
-      const rect = imageContainer.getBoundingClientRect();
+      const rect = imgElement.getBoundingClientRect();
       const centerX = rect.width / 2;
       const centerY = rect.height / 2;
       
@@ -386,6 +426,9 @@
       loadSelectedSources();
     });
   });
+
+  // Set initial cursor
+  imgElement.style.cursor = 'grab';
 </script>
 
 </body>
