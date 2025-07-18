@@ -18,7 +18,7 @@
       justify-content: center;
       height: 100vh;
       overflow: hidden;
-      touch-action: none; /* Disable browser touch gestures */
+      touch-action: none;
     }
     .image-container {
       position: relative;
@@ -37,17 +37,27 @@
       position: absolute;
       top: 50%;
       left: 50%;
-      transform: translate(-50%, -50%);
+      transform: translate(-50%, -50%) scale(1);
+      transform-origin: center;
       cursor: grab;
       user-select: none;
       -webkit-user-drag: none;
+      transition: transform 0.1s ease-out;
     }
     img:active {
       cursor: grabbing;
     }
-    button {
+    .controls {
       position: fixed;
       bottom: 20px;
+      width: 100%;
+      display: flex;
+      justify-content: space-between;
+      padding: 0 20px;
+      box-sizing: border-box;
+      pointer-events: none;
+    }
+    .controls button {
       font-size: 3em;
       padding: 0.1em 0.3em;
       cursor: pointer;
@@ -57,20 +67,14 @@
       color: #fff;
       user-select: none;
       transition: background 0.3s;
-      z-index: 1000;
+      pointer-events: auto;
     }
-    button:disabled {
+    .controls button:disabled {
       opacity: 0.3;
       cursor: default;
     }
-    button:hover:not(:disabled) {
+    .controls button:hover:not(:disabled) {
       background: rgba(70,70,70,0.9);
-    }
-    #backBtn {
-      left: 20px;
-    }
-    #forwardBtn {
-      right: 20px;
     }
     .toggles {
       position: fixed;
@@ -93,6 +97,16 @@
     .toggles input[type="checkbox"] {
       transform: scale(1.3);
     }
+    .zoom-indicator {
+      position: fixed;
+      bottom: 20px;
+      left: 50%;
+      transform: translateX(-50%);
+      background: rgba(0,0,0,0.5);
+      padding: 5px 10px;
+      border-radius: 5px;
+      font-size: 0.9em;
+    }
   </style>
 </head>
 <body>
@@ -108,8 +122,15 @@
 <div class="image-container">
   <img id="mainImage" src="" alt="Random Image" draggable="false" />
 </div>
-<button id="backBtn" disabled aria-label="Previous image">&lt;</button>
-<button id="forwardBtn" disabled aria-label="Next image">&gt;</button>
+
+<div class="controls">
+  <button id="backBtn" disabled aria-label="Previous image">A</button>
+  <button id="forwardBtn" disabled aria-label="Next image">D</button>
+</div>
+
+<div class="zoom-indicator">
+  Zoom: 100% (W/S to zoom, A/D to navigate)
+</div>
 
 <script>
   const baseURL = 'https://f003.backblazeb2.com/file/links-ref/';
@@ -118,6 +139,7 @@
   const forwardBtn = document.getElementById('forwardBtn');
   const checkboxes = document.querySelectorAll('.toggles input[type="checkbox"]');
   const imageContainer = document.querySelector('.image-container');
+  const zoomIndicator = document.querySelector('.zoom-indicator');
 
   let sourceLists = {};
   let currentImage = null;
@@ -126,11 +148,14 @@
   const maxHistory = 5;
   const maxPreload = 3;
 
-  // Panning variables
+  // Panning and zoom variables
   let isDragging = false;
   let startPos = { x: 0, y: 0 };
   let translate = { x: 0, y: 0 };
   let scale = 1;
+  const minScale = 0.5;
+  const maxScale = 4;
+  const scaleStep = 0.2;
 
   // Prevent default drag behavior
   document.addEventListener('dragstart', (e) => {
@@ -167,7 +192,7 @@
     translate.y += currentPos.y - startPos.y;
     startPos = currentPos;
     
-    updateImagePosition();
+    updateImageTransform();
   }
 
   document.addEventListener('mouseup', endDrag);
@@ -192,13 +217,44 @@
     }
   }
 
-  function updateImagePosition() {
-    imgElement.style.transform = `translate(calc(-50% + ${translate.x}px), calc(-50% + ${translate.y}px))`;
+  function updateImageTransform() {
+    imgElement.style.transform = `translate(calc(-50% + ${translate.x}px), calc(-50% + ${translate.y}px)) scale(${scale})`;
+    zoomIndicator.textContent = `Zoom: ${Math.round(scale * 100)}% (W/S to zoom, A/D to navigate)`;
   }
 
   function resetImagePosition() {
     translate = { x: 0, y: 0 };
-    updateImagePosition();
+    scale = 1;
+    updateImageTransform();
+  }
+
+  function zoomAtPosition(zoomDirection, clientX, clientY) {
+    const containerRect = imageContainer.getBoundingClientRect();
+    const imgRect = imgElement.getBoundingClientRect();
+    
+    // Calculate position relative to image
+    const x = clientX - imgRect.left;
+    const y = clientY - imgRect.top;
+    
+    // Calculate position relative to image center
+    const centerX = imgRect.width / 2;
+    const centerY = imgRect.height / 2;
+    
+    // Calculate current offset from center including translation
+    const offsetX = (x - centerX) - translate.x;
+    const offsetY = (y - centerY) - translate.y;
+    
+    // Calculate old and new scale
+    const oldScale = scale;
+    scale = zoomDirection === 'in' 
+      ? Math.min(scale + scaleStep, maxScale) 
+      : Math.max(scale - scaleStep, minScale);
+    
+    // Calculate new translation to zoom at position
+    translate.x -= (offsetX * (scale / oldScale - 1));
+    translate.y -= (offsetY * (scale / oldScale - 1));
+    
+    updateImageTransform();
   }
 
   function updateButtons() {
@@ -273,7 +329,7 @@
     imgElement.src = imageData.url;
     imgElement.alt = `${imageData.subject} image`;
     currentImage = imageData;
-    resetImagePosition(); // Reset pan position when new image loads
+    resetImagePosition();
     preloadForwardImages();
     updateButtons();
   }
@@ -292,6 +348,14 @@
   }
 
   backBtn.addEventListener('click', () => {
+    navigateBack();
+  });
+
+  forwardBtn.addEventListener('click', () => {
+    navigateForward();
+  });
+
+  function navigateBack() {
     if (historyStack.length > 0) {
       if (currentImage) {
         forwardStack.unshift(currentImage);
@@ -300,9 +364,9 @@
       const prev = historyStack.pop();
       showImage(prev);
     }
-  });
+  }
 
-  forwardBtn.addEventListener('click', () => {
+  function navigateForward() {
     if (forwardStack.length > 0) {
       if (currentImage) {
         historyStack.push(currentImage);
@@ -316,11 +380,28 @@
     } else {
       showRandomImage();
     }
-  });
+  }
 
   document.addEventListener('keydown', (event) => {
-    if (event.key === 'ArrowLeft') backBtn.click();
-    else if (event.key === 'ArrowRight') forwardBtn.click();
+    // Prevent default for our keys
+    if (['a', 'd', 'w', 's'].includes(event.key.toLowerCase())) {
+      event.preventDefault();
+    }
+
+    switch (event.key.toLowerCase()) {
+      case 'a':
+        navigateBack();
+        break;
+      case 'd':
+        navigateForward();
+        break;
+      case 'w':
+        zoomAtPosition('in', window.innerWidth / 2, window.innerHeight / 2);
+        break;
+      case 's':
+        zoomAtPosition('out', window.innerWidth / 2, window.innerHeight / 2);
+        break;
+    }
   });
 
   checkboxes.forEach(cb => {
