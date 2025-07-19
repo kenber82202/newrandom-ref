@@ -107,8 +107,8 @@
       z-index: 1000;
     }
     .top-controls button {
-      padding: 8px 12px;
-      font-size: 1em;
+      padding: 5px 8px;
+      font-size: 0.8em;
       background: rgba(30,30,30,0.8);
       color: #fff;
       border: none;
@@ -128,8 +128,8 @@
 </div>
 
 <div class="top-controls">
-  <button id="resetBtn">Reset View</button>
-  <button id="flipBtn">Flip Horizontal</button>
+  <button id="resetBtn">↻ Reset</button>
+  <button id="flipBtn">⇄ Flip</button>
 </div>
 
 <div class="image-container">
@@ -167,6 +167,7 @@
   const minScale = 0.5;
   const maxScale = 4;
   const scaleStep = 0.2;
+  let initialDistance = null;
 
   // Prevent default drag behavior
   document.addEventListener('dragstart', (e) => {
@@ -180,9 +181,56 @@
     e.preventDefault();
   });
 
+  // Touch event handlers for pinch zoom
+  imageContainer.addEventListener('touchstart', handleTouchStart, { passive: false });
+  imageContainer.addEventListener('touchmove', handleTouchMove, { passive: false });
+  imageContainer.addEventListener('touchend', handleTouchEnd);
+
+  function handleTouchStart(e) {
+    if (e.touches.length === 2) {
+      e.preventDefault();
+      initialDistance = getDistance(e.touches[0], e.touches[1]);
+    } else if (e.touches.length === 1) {
+      startDrag(e);
+    }
+  }
+
+  function handleTouchMove(e) {
+    if (e.touches.length === 2) {
+      e.preventDefault();
+      const currentDistance = getDistance(e.touches[0], e.touches[1]);
+      if (initialDistance) {
+        const center = getCenter(e.touches[0], e.touches[1]);
+        const zoomDirection = currentDistance > initialDistance ? 'in' : 'out';
+        zoomAtPosition(zoomDirection, center.x, center.y);
+      }
+      initialDistance = currentDistance;
+    } else if (e.touches.length === 1) {
+      drag(e);
+    }
+  }
+
+  function handleTouchEnd() {
+    endDrag();
+    initialDistance = null;
+  }
+
+  function getDistance(touch1, touch2) {
+    return Math.hypot(
+      touch2.clientX - touch1.clientX,
+      touch2.clientY - touch1.clientY
+    );
+  }
+
+  function getCenter(touch1, touch2) {
+    return {
+      x: (touch1.clientX + touch2.clientX) / 2,
+      y: (touch1.clientY + touch2.clientY) / 2
+    };
+  }
+
   // Panning functionality
   imgElement.addEventListener('mousedown', startDrag);
-  imgElement.addEventListener('touchstart', startDrag, { passive: false });
 
   function startDrag(e) {
     e.preventDefault();
@@ -192,7 +240,6 @@
   }
 
   document.addEventListener('mousemove', drag);
-  document.addEventListener('touchmove', drag, { passive: false });
 
   function drag(e) {
     if (!isDragging) return;
@@ -207,7 +254,6 @@
   }
 
   document.addEventListener('mouseup', endDrag);
-  document.addEventListener('touchend', endDrag);
 
   function endDrag() {
     isDragging = false;
@@ -215,7 +261,7 @@
   }
 
   function getClientPos(e) {
-    if (e.type.includes('touch')) {
+    if (e.touches && e.touches.length > 0) {
       return {
         x: e.touches[0].clientX,
         y: e.touches[0].clientY
@@ -239,6 +285,7 @@
   function resetImagePosition() {
     translate = { x: 0, y: 0 };
     scale = 1;
+    isFlipped = false;
     updateImageTransform();
   }
 
@@ -248,7 +295,6 @@
   }
 
   function zoomAtPosition(zoomDirection, clientX, clientY) {
-    const containerRect = imageContainer.getBoundingClientRect();
     const imgRect = imgElement.getBoundingClientRect();
     
     // Calculate position relative to image
