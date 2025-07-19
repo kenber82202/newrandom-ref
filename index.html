@@ -3,7 +3,7 @@
 <head>
   <meta name="apple-mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
-  <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=yes">
+  <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=5, user-scalable=yes">
   <meta charset="UTF-8" />
   <title>Random Image Navigator</title>
   <style>
@@ -18,13 +18,13 @@
       justify-content: center;
       height: 100vh;
       overflow: hidden;
-      touch-action: pan-x pan-y;
     }
     .image-container {
       position: relative;
       width: 100vw;
       height: 100vh;
       overflow: hidden;
+      touch-action: none; /* Disable browser touch gestures */
     }
     img {
       width: auto;
@@ -37,13 +37,10 @@
       position: absolute;
       top: 50%;
       left: 50%;
-      transform: translate(-50%, -50%) scale(1);
-      transform-origin: center;
+      transform: translate(-50%, -50%);
       cursor: grab;
       user-select: none;
       -webkit-user-drag: none;
-      transition: transform 0.1s ease-out;
-      touch-action: none;
     }
     img:active {
       cursor: grabbing;
@@ -123,42 +120,6 @@
       align-items: center;
       justify-content: center;
     }
-    .zoom-control {
-      position: relative;
-      width: 36px;
-      height: 100px;
-      background: rgba(30,30,30,0.5);
-      border-radius: 18px;
-      margin-top: 10px;
-      display: flex;
-      flex-direction: column;
-      align-items: center;
-      justify-content: space-between;
-      padding: 10px 0;
-    }
-    .zoom-slider {
-      width: 30px;
-      height: 60px;
-      background: rgba(70,70,70,0.7);
-      border-radius: 15px;
-      position: relative;
-      cursor: ns-resize;
-      touch-action: none;
-    }
-    .zoom-slider-handle {
-      width: 30px;
-      height: 30px;
-      background: rgba(255,255,255,0.9);
-      border-radius: 50%;
-      position: absolute;
-      left: 0;
-      top: 15px;
-      touch-action: none;
-    }
-    .zoom-plus, .zoom-minus {
-      font-size: 0.8em;
-      color: #fff;
-    }
   </style>
 </head>
 <body>
@@ -174,13 +135,6 @@
 <div class="top-controls">
   <button id="resetBtn" title="Reset View">↻</button>
   <button id="flipBtn" title="Flip Horizontal">↔</button>
-  <div class="zoom-control">
-    <div class="zoom-plus">+</div>
-    <div class="zoom-slider" id="zoomSlider">
-      <div class="zoom-slider-handle"></div>
-    </div>
-    <div class="zoom-minus">-</div>
-  </div>
 </div>
 
 <div class="image-container">
@@ -199,8 +153,6 @@
   const forwardBtn = document.getElementById('forwardBtn');
   const resetBtn = document.getElementById('resetBtn');
   const flipBtn = document.getElementById('flipBtn');
-  const zoomSlider = document.getElementById('zoomSlider');
-  const zoomHandle = zoomSlider.querySelector('.zoom-slider-handle');
   const checkboxes = document.querySelectorAll('.toggles input[type="checkbox"]');
   const imageContainer = document.querySelector('.image-container');
 
@@ -209,26 +161,76 @@
   let historyStack = [];
   let forwardStack = [];
   const maxHistory = 5;
-  const maxPreload = 7; // Increased from 3 to 7
+  const maxPreload = 7;
 
-  // Panning and zoom variables
+  // Panning variables
   let isDragging = false;
-  let isZoomDragging = false;
   let startPos = { x: 0, y: 0 };
-  let zoomStartY = 0;
   let translate = { x: 0, y: 0 };
-  let scale = 1;
   let isFlipped = false;
-  const minScale = 0.5;
-  const maxScale = 4;
-  const scaleStep = 0.2;
 
-  // Initialize zoom slider position
-  updateZoomSliderPosition();
+  // Mobile touch handling
+  function handleTouchStart(e) {
+    if (e.touches.length === 1) {
+      isDragging = true;
+      startPos = {
+        x: e.touches[0].clientX - translate.x,
+        y: e.touches[0].clientY - translate.y
+      };
+      imgElement.style.cursor = 'grabbing';
+      e.preventDefault();
+    }
+  }
+
+  function handleTouchMove(e) {
+    if (isDragging && e.touches.length === 1) {
+      translate.x = e.touches[0].clientX - startPos.x;
+      translate.y = e.touches[0].clientY - startPos.y;
+      updateImageTransform();
+      e.preventDefault();
+    }
+  }
+
+  function handleTouchEnd() {
+    isDragging = false;
+    imgElement.style.cursor = 'grab';
+  }
+
+  // Mouse handling
+  function handleMouseDown(e) {
+    isDragging = true;
+    startPos = {
+      x: e.clientX - translate.x,
+      y: e.clientY - translate.y
+    };
+    imgElement.style.cursor = 'grabbing';
+    e.preventDefault();
+  }
+
+  function handleMouseMove(e) {
+    if (isDragging) {
+      translate.x = e.clientX - startPos.x;
+      translate.y = e.clientY - startPos.y;
+      updateImageTransform();
+    }
+  }
+
+  function handleMouseUp() {
+    isDragging = false;
+    imgElement.style.cursor = 'grab';
+  }
+
+  // Event listeners
+  imgElement.addEventListener('mousedown', handleMouseDown);
+  imgElement.addEventListener('touchstart', handleTouchStart, { passive: false });
+  document.addEventListener('mousemove', handleMouseMove);
+  document.addEventListener('touchmove', handleTouchMove, { passive: false });
+  document.addEventListener('mouseup', handleMouseUp);
+  document.addEventListener('touchend', handleTouchEnd);
 
   // Prevent default drag behavior
   document.addEventListener('dragstart', (e) => {
-    if (e.target === imgElement || e.target === zoomHandle) {
+    if (e.target === imgElement) {
       e.preventDefault();
     }
   });
@@ -238,140 +240,21 @@
     e.preventDefault();
   });
 
-  // Improved mobile panning
-  imgElement.addEventListener('mousedown', startDrag);
-  imgElement.addEventListener('touchstart', handleTouchStart, { passive: false });
-
-  function handleTouchStart(e) {
-    if (e.touches.length === 1) {
-      // Single touch - panning
-      startDrag(e.touches[0]);
-    }
-    // Multi-touch will use native pinch-zoom
-  }
-
-  function startDrag(e) {
-    if (e.target !== imgElement) return;
-    e.preventDefault();
-    isDragging = true;
-    startPos = getClientPos(e);
-    imgElement.style.cursor = 'grabbing';
-  }
-
-  document.addEventListener('mousemove', drag);
-  document.addEventListener('touchmove', handleTouchMove, { passive: false });
-
-  function handleTouchMove(e) {
-    if (e.touches.length === 1 && isDragging) {
-      drag(e.touches[0]);
-    }
-  }
-
-  function drag(e) {
-    if (!isDragging) return;
-    e.preventDefault();
-    
-    const currentPos = getClientPos(e);
-    translate.x += currentPos.x - startPos.x;
-    translate.y += currentPos.y - startPos.y;
-    startPos = currentPos;
-    
-    updateImageTransform();
-  }
-
-  document.addEventListener('mouseup', endDrag);
-  document.addEventListener('touchend', endDrag);
-
-  function endDrag() {
-    isDragging = false;
-    isZoomDragging = false;
-    imgElement.style.cursor = 'grab';
-  }
-
-  // Zoom slider interaction
-  let zoomHandleStartY = 0;
-  zoomHandle.addEventListener('mousedown', startZoomDrag);
-  zoomHandle.addEventListener('touchstart', startZoomDrag, { passive: false });
-  zoomSlider.addEventListener('mousedown', startZoomDragFromArea);
-  zoomSlider.addEventListener('touchstart', startZoomDragFromArea, { passive: false });
-
-  function startZoomDrag(e) {
-    e.preventDefault();
-    isZoomDragging = true;
-    zoomStartY = e.clientY || e.touches[0].clientY;
-    zoomHandleStartY = parseInt(zoomHandle.style.top || '15');
-    document.body.style.cursor = 'ns-resize';
-  }
-
-  function startZoomDragFromArea(e) {
-    if (e.target !== zoomSlider) return;
-    e.preventDefault();
-    isZoomDragging = true;
-    zoomStartY = e.clientY || e.touches[0].clientY;
-    const rect = zoomSlider.getBoundingClientRect();
-    const clickY = (e.clientY || e.touches[0].clientY) - rect.top;
-    const newTop = Math.min(Math.max(0, clickY - zoomHandle.offsetHeight/2), zoomSlider.offsetHeight - zoomHandle.offsetHeight);
-    zoomHandle.style.top = `${newTop}px`;
-    zoomHandleStartY = newTop;
-    scale = minScale + (newTop / (zoomSlider.offsetHeight - zoomHandle.offsetHeight)) * (maxScale - minScale);
-    updateImageTransform();
-    document.body.style.cursor = 'ns-resize';
-  }
-
-  function updateZoomSliderPosition() {
-    const sliderHeight = zoomSlider.offsetHeight - zoomHandle.offsetHeight;
-    const handlePosition = ((scale - minScale) / (maxScale - minScale)) * sliderHeight;
-    zoomHandle.style.top = `${handlePosition}px`;
-  }
-
-  function getClientPos(e) {
-    return {
-      x: e.clientX || e.pageX,
-      y: e.clientY || e.pageY
-    };
-  }
-
   function updateImageTransform() {
     const flipValue = isFlipped ? -1 : 1;
     imgElement.style.transform = `
-      translate(calc(-50% + ${translate.x}px), calc(-50% + ${translate.y}px)) 
-      scale(${scale * flipValue}, ${scale})
+      translate(calc(-50% + ${translate.x}px), calc(-50% + ${translate.y}px))
+      scaleX(${flipValue})
     `;
-    updateZoomSliderPosition();
   }
 
   function resetImagePosition() {
     translate = { x: 0, y: 0 };
-    scale = 1;
-    isFlipped = false;
     updateImageTransform();
   }
 
   function flipHorizontal() {
     isFlipped = !isFlipped;
-    updateImageTransform();
-  }
-
-  function zoomAtPosition(zoomDirection, clientX, clientY) {
-    const imgRect = imgElement.getBoundingClientRect();
-    
-    const x = clientX - imgRect.left;
-    const y = clientY - imgRect.top;
-    
-    const imgCenterX = imgRect.width / 2;
-    const imgCenterY = imgRect.height / 2;
-    
-    const imgX = x - imgCenterX - translate.x;
-    const imgY = y - imgCenterY - translate.y;
-    
-    const oldScale = scale;
-    scale = zoomDirection === 'in' 
-      ? Math.min(scale + scaleStep, maxScale) 
-      : Math.max(scale - scaleStep, minScale);
-    
-    translate.x -= (imgX * (scale / oldScale - 1));
-    translate.y -= (imgY * (scale / oldScale - 1));
-    
     updateImageTransform();
   }
 
@@ -480,7 +363,7 @@
     }
   }
 
-  // Event listeners
+  // Button event listeners
   backBtn.addEventListener('click', () => {
     navigateBack();
   });
@@ -524,13 +407,11 @@
     }
   }
 
+  // Keyboard shortcuts
   document.addEventListener('keydown', (event) => {
-    if (['a', 'd', 'w', 's', 'r', 'f'].includes(event.key.toLowerCase())) {
+    if (['a', 'd', 'r', 'f'].includes(event.key.toLowerCase())) {
       event.preventDefault();
     }
-
-    const cursorX = event.clientX || window.innerWidth / 2;
-    const cursorY = event.clientY || window.innerHeight / 2;
 
     switch (event.key.toLowerCase()) {
       case 'a':
@@ -538,12 +419,6 @@
         break;
       case 'd':
         navigateForward();
-        break;
-      case 'w':
-        zoomAtPosition('in', cursorX, cursorY);
-        break;
-      case 's':
-        zoomAtPosition('out', cursorX, cursorY);
         break;
       case 'r':
         resetImagePosition();
