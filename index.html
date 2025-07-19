@@ -444,8 +444,8 @@
     if (['a', 'd', 'w', 's', 'r', 'f'].includes(event.key.toLowerCase())) {
       event.preventDefault();
 
-      const cursorX = event.clientX || window.innerWidth / 2;
-      const cursorY = event.clientY || window.innerHeight / 2;
+      const cursorX = window.innerWidth / 2;
+      const cursorY = window.innerHeight / 2;
 
       switch (event.key.toLowerCase()) {
         case 'a':
