@@ -5,7 +5,7 @@
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
   <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
   <meta charset="UTF-8">
-  <title>Professional Image Navigator</title>
+  <title>Image Navigator</title>
   <script src="https://unpkg.com/@panzoom/panzoom@4.5.1/dist/panzoom.min.js"></script>
   <style>
     * {
@@ -42,6 +42,7 @@
       user-select: none;
       -webkit-user-drag: none;
       touch-action: none;
+      transform-origin: center;
     }
     #mainImage:active {
       cursor: grabbing;
@@ -156,7 +157,6 @@
   const resetBtn = document.getElementById('resetBtn');
   const flipBtn = document.getElementById('flipBtn');
   const checkboxes = document.querySelectorAll('.toggles input[type="checkbox"]');
-  const imageContainer = document.querySelector('.image-container');
 
   // State
   let sourceLists = {};
@@ -166,7 +166,7 @@
   let isFlipped = false;
   let panzoomInstance;
 
-  // Initialize Panzoom
+  // Initialize Panzoom with proper settings
   function initPanzoom() {
     panzoomInstance = Panzoom(imgElement, {
       maxScale: 5,
@@ -177,22 +177,25 @@
       disablePan: false,
       disableZoom: false,
       cursor: 'grab',
-      touchAction: 'none',
-      zoomWithWheel: true,
-      silent: false
+      touchAction: 'none'
     });
 
-    // Enable smooth zoom to cursor
+    // Enable wheel zoom at cursor position
     imgElement.addEventListener('wheel', panzoomInstance.zoomWithWheel);
     
-    // Double-click to reset
-    imgElement.addEventListener('dblclick', panzoomInstance.reset);
+    // Handle double-click reset
+    imgElement.addEventListener('dblclick', () => {
+      panzoomInstance.reset();
+      isFlipped = false;
+      imgElement.style.transform = '';
+    });
   }
 
   // Flip image horizontally
   function flipHorizontal() {
     isFlipped = !isFlipped;
-    imgElement.style.transform = `scaleX(${isFlipped ? -1 : 1}) ${imgElement.style.transform}`;
+    const currentTransform = panzoomInstance.getTransform();
+    imgElement.style.transform = `scaleX(${isFlipped ? -1 : 1}) matrix(${currentTransform.scale}, 0, 0, ${currentTransform.scale}, ${currentTransform.x}, ${currentTransform.y})`;
   }
 
   // Reset view
