@@ -99,22 +99,25 @@
     }
     .top-controls {
       position: fixed;
-      top: 80px;
-      left: 50%;
-      transform: translateX(-50%);
+      top: 15px;
+      right: 15px;
       display: flex;
       gap: 8px;
       z-index: 100;
     }
     .top-controls button {
-      padding: 6px 10px;
-      font-size: 14px;
+      width: 40px;
+      height: 40px;
+      font-size: 20px;
       background: rgba(30,30,30,0.8);
       color: #fff;
       border: none;
-      border-radius: 5px;
+      border-radius: 50%;
       cursor: pointer;
       touch-action: manipulation;
+      display: flex;
+      align-items: center;
+      justify-content: center;
     }
   </style>
 </head>
@@ -129,8 +132,8 @@
 </div>
 
 <div class="top-controls">
-  <button id="resetBtn">↻ Reset</button>
-  <button id="flipBtn">⇄ Flip</button>
+  <button id="resetBtn" title="Reset">⟲</button>
+  <button id="flipBtn" title="Flip">↔</button>
 </div>
 
 <div class="image-container">
@@ -158,7 +161,7 @@
   const maxPreload = 3;
   const minScale = 0.5;
   const maxScale = 4;
-  const scaleStep = 0.2;
+  const scaleStep = 0.1; // Reduced sensitivity for zooming
 
   // State
   let sourceLists = {};
@@ -174,6 +177,7 @@
   let lastTouchTime = 0;
   let animationFrameId = null;
   let isInteracting = false;
+  let lastScale = 1;
 
   // Touch Handlers
   function setupTouchHandlers() {
@@ -190,6 +194,7 @@
     if (e.touches.length === 2) {
       e.preventDefault();
       initialDistance = getDistance(e.touches[0], e.touches[1]);
+      lastScale = scale;
     } else if (e.touches.length === 1) {
       startDrag(e);
     }
@@ -204,10 +209,21 @@
       const currentDistance = getDistance(e.touches[0], e.touches[1]);
       if (initialDistance) {
         const center = getCenter(e.touches[0], e.touches[1]);
-        const zoomDirection = currentDistance > initialDistance ? 'in' : 'out';
-        zoomAtPosition(zoomDirection, center.x, center.y);
+        const newScale = Math.min(maxScale, Math.max(minScale, lastScale * (currentDistance / initialDistance)));
+        const scaleChange = newScale / scale;
+        
+        // Calculate the focal point in image coordinates
+        const imgRect = imgElement.getBoundingClientRect();
+        const focalX = center.x - imgRect.left;
+        const focalY = center.y - imgRect.top;
+        
+        // Adjust translation to zoom at the focal point
+        translate.x = focalX - (focalX - translate.x) * scaleChange;
+        translate.y = focalY - (focalY - translate.y) * scaleChange;
+        
+        scale = newScale;
+        updateImageTransform();
       }
-      initialDistance = currentDistance;
     } else if (e.touches.length === 1) {
       drag(e);
     }
@@ -302,10 +318,17 @@
 
   function zoomAtPosition(zoomDirection, clientX, clientY) {
     const imgRect = imgElement.getBoundingClientRect();
+    const containerRect = imageContainer.getBoundingClientRect();
+    
+    // Calculate position relative to image
     const x = clientX - imgRect.left;
     const y = clientY - imgRect.top;
+    
+    // Calculate position relative to image center
     const centerX = imgRect.width / 2;
     const centerY = imgRect.height / 2;
+    
+    // Calculate current offset from center including translation
     const offsetX = (x - centerX) - translate.x;
     const offsetY = (y - centerY) - translate.y;
     
@@ -314,6 +337,7 @@
       ? Math.min(scale + scaleStep, maxScale) 
       : Math.max(scale - scaleStep, minScale);
     
+    // Adjust translation to zoom at the cursor position
     translate.x -= (offsetX * (scale / oldScale - 1));
     translate.y -= (offsetY * (scale / oldScale - 1));
     
