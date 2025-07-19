@@ -440,32 +440,33 @@
   });
 
   document.addEventListener('keydown', (event) => {
+    // Remove the extra parenthesis in this line:
     if (['a', 'd', 'w', 's', 'r', 'f'].includes(event.key.toLowerCase())) {
       event.preventDefault();
-    }
 
-    const cursorX = event.clientX || window.innerWidth / 2;
-    const cursorY = event.clientY || window.innerHeight / 2;
+      const cursorX = event.clientX || window.innerWidth / 2;
+      const cursorY = event.clientY || window.innerHeight / 2;
 
-    switch (event.key.toLowerCase()) {
-      case 'a':
-        navigateBack();
-        break;
-      case 'd':
-        navigateForward();
-        break;
-      case 'w':
-        if (isDesktop) zoomAtPosition('in', cursorX, cursorY);
-        break;
-      case 's':
-        if (isDesktop) zoomAtPosition('out', cursorX, cursorY);
-        break;
-      case 'r':
-        if (isDesktop) resetImagePosition();
-        break;
-      case 'f':
-        if (isDesktop) flipHorizontal();
-        break;
+      switch (event.key.toLowerCase()) {
+        case 'a':
+          navigateBack();
+          break;
+        case 'd':
+          navigateForward();
+          break;
+        case 'w':
+          if (isDesktop) zoomAtPosition('in', cursorX, cursorY);
+          break;
+        case 's':
+          if (isDesktop) zoomAtPosition('out', cursorX, cursorY);
+          break;
+        case 'r':
+          if (isDesktop) resetImagePosition();
+          break;
+        case 'f':
+          if (isDesktop) flipHorizontal();
+          break;
+      }
     }
   });
 
