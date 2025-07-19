@@ -3,7 +3,7 @@
 <head>
   <meta name="apple-mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
-  <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
+  <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=yes">
   <meta charset="UTF-8" />
   <title>Random Image Navigator</title>
   <style>
@@ -18,7 +18,7 @@
       justify-content: center;
       height: 100vh;
       overflow: hidden;
-      touch-action: none;
+      touch-action: pan-x pan-y;
     }
     .image-container {
       position: relative;
@@ -43,6 +43,7 @@
       user-select: none;
       -webkit-user-drag: none;
       transition: transform 0.1s ease-out;
+      touch-action: none;
     }
     img:active {
       cursor: grabbing;
@@ -56,6 +57,7 @@
       padding: 0 20px;
       box-sizing: border-box;
       pointer-events: none;
+      z-index: 1000;
     }
     .controls button {
       font-size: 3em;
@@ -207,7 +209,7 @@
   let historyStack = [];
   let forwardStack = [];
   const maxHistory = 5;
-  const maxPreload = 7; // Changed from 3 to 7
+  const maxPreload = 7; // Increased from 3 to 7
 
   // Panning and zoom variables
   let isDragging = false;
@@ -236,9 +238,17 @@
     e.preventDefault();
   });
 
-  // Panning functionality
+  // Improved mobile panning
   imgElement.addEventListener('mousedown', startDrag);
-  imgElement.addEventListener('touchstart', startDrag, { passive: false });
+  imgElement.addEventListener('touchstart', handleTouchStart, { passive: false });
+
+  function handleTouchStart(e) {
+    if (e.touches.length === 1) {
+      // Single touch - panning
+      startDrag(e.touches[0]);
+    }
+    // Multi-touch will use native pinch-zoom
+  }
 
   function startDrag(e) {
     if (e.target !== imgElement) return;
@@ -249,28 +259,24 @@
   }
 
   document.addEventListener('mousemove', drag);
-  document.addEventListener('touchmove', drag, { passive: false });
+  document.addEventListener('touchmove', handleTouchMove, { passive: false });
+
+  function handleTouchMove(e) {
+    if (e.touches.length === 1 && isDragging) {
+      drag(e.touches[0]);
+    }
+  }
 
   function drag(e) {
-    if (isDragging) {
-      e.preventDefault();
-      const currentPos = getClientPos(e);
-      translate.x += currentPos.x - startPos.x;
-      translate.y += currentPos.y - startPos.y;
-      startPos = currentPos;
-      updateImageTransform();
-    } else if (isZoomDragging) {
-      e.preventDefault();
-      const currentPos = getClientPos(e);
-      const deltaY = currentPos.y - zoomStartY;
-      const sliderHeight = zoomSlider.offsetHeight - zoomHandle.offsetHeight;
-      let newTop = Math.min(Math.max(0, zoomHandleStartY + deltaY), sliderHeight);
-      
-      // Calculate scale based on slider position
-      scale = minScale + (newTop / sliderHeight) * (maxScale - minScale);
-      zoomHandle.style.top = `${newTop}px`;
-      updateImageTransform();
-    }
+    if (!isDragging) return;
+    e.preventDefault();
+    
+    const currentPos = getClientPos(e);
+    translate.x += currentPos.x - startPos.x;
+    translate.y += currentPos.y - startPos.y;
+    startPos = currentPos;
+    
+    updateImageTransform();
   }
 
   document.addEventListener('mouseup', endDrag);
@@ -280,58 +286,36 @@
     isDragging = false;
     isZoomDragging = false;
     imgElement.style.cursor = 'grab';
-    document.body.style.cursor = '';
   }
 
-  // Zoom slider interaction - updated for mobile support
+  // Zoom slider interaction
   let zoomHandleStartY = 0;
   zoomHandle.addEventListener('mousedown', startZoomDrag);
-  zoomHandle.addEventListener('touchstart', startZoomDragTouch, { passive: false });
+  zoomHandle.addEventListener('touchstart', startZoomDrag, { passive: false });
   zoomSlider.addEventListener('mousedown', startZoomDragFromArea);
-  zoomSlider.addEventListener('touchstart', startZoomDragFromAreaTouch, { passive: false });
+  zoomSlider.addEventListener('touchstart', startZoomDragFromArea, { passive: false });
 
   function startZoomDrag(e) {
     e.preventDefault();
     isZoomDragging = true;
-    zoomStartY = e.clientY;
+    zoomStartY = e.clientY || e.touches[0].clientY;
     zoomHandleStartY = parseInt(zoomHandle.style.top || '15');
     document.body.style.cursor = 'ns-resize';
-  }
-
-  function startZoomDragTouch(e) {
-    e.preventDefault();
-    isZoomDragging = true;
-    zoomStartY = e.touches[0].clientY;
-    zoomHandleStartY = parseInt(zoomHandle.style.top || '15');
   }
 
   function startZoomDragFromArea(e) {
     if (e.target !== zoomSlider) return;
     e.preventDefault();
     isZoomDragging = true;
-    zoomStartY = e.clientY;
+    zoomStartY = e.clientY || e.touches[0].clientY;
     const rect = zoomSlider.getBoundingClientRect();
-    const clickY = e.clientY - rect.top;
+    const clickY = (e.clientY || e.touches[0].clientY) - rect.top;
     const newTop = Math.min(Math.max(0, clickY - zoomHandle.offsetHeight/2), zoomSlider.offsetHeight - zoomHandle.offsetHeight);
     zoomHandle.style.top = `${newTop}px`;
     zoomHandleStartY = newTop;
     scale = minScale + (newTop / (zoomSlider.offsetHeight - zoomHandle.offsetHeight)) * (maxScale - minScale);
     updateImageTransform();
     document.body.style.cursor = 'ns-resize';
-  }
-
-  function startZoomDragFromAreaTouch(e) {
-    if (e.target !== zoomSlider) return;
-    e.preventDefault();
-    isZoomDragging = true;
-    zoomStartY = e.touches[0].clientY;
-    const rect = zoomSlider.getBoundingClientRect();
-    const clickY = e.touches[0].clientY - rect.top;
-    const newTop = Math.min(Math.max(0, clickY - zoomHandle.offsetHeight/2), zoomSlider.offsetHeight - zoomHandle.offsetHeight);
-    zoomHandle.style.top = `${newTop}px`;
-    zoomHandleStartY = newTop;
-    scale = minScale + (newTop / (zoomSlider.offsetHeight - zoomHandle.offsetHeight)) * (maxScale - minScale);
-    updateImageTransform();
   }
 
   function updateZoomSliderPosition() {
@@ -341,17 +325,10 @@
   }
 
   function getClientPos(e) {
-    if (e.type.includes('touch')) {
-      return {
-        x: e.touches[0].clientX,
-        y: e.touches[0].clientY
-      };
-    } else {
-      return {
-        x: e.clientX,
-        y: e.clientY
-      };
-    }
+    return {
+      x: e.clientX || e.pageX,
+      y: e.clientY || e.pageY
+    };
   }
 
   function updateImageTransform() {
@@ -376,7 +353,6 @@
   }
 
   function zoomAtPosition(zoomDirection, clientX, clientY) {
-    const containerRect = imageContainer.getBoundingClientRect();
     const imgRect = imgElement.getBoundingClientRect();
     
     const x = clientX - imgRect.left;
