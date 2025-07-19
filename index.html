@@ -3,7 +3,7 @@
 <head>
   <meta name="apple-mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
-  <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
+  <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=yes">
   <meta charset="UTF-8" />
   <title>Random Image Navigator</title>
   <style>
@@ -18,12 +18,15 @@
       justify-content: center;
       height: 100vh;
       overflow: hidden;
+      -webkit-user-select: none;
+      user-select: none;
     }
     .image-container {
       position: relative;
       width: 100vw;
       height: 100vh;
       overflow: hidden;
+      touch-action: manipulation;
     }
     img {
       width: auto;
@@ -85,12 +88,16 @@
       z-index: 1001;
       display: flex;
       gap: 10px;
+      flex-wrap: wrap;
+      justify-content: center;
+      max-width: 100%;
     }
     .toggles label {
       display: flex;
       align-items: center;
       gap: 5px;
       cursor: pointer;
+      white-space: nowrap;
     }
     .toggles input[type="checkbox"] {
       transform: scale(1.3);
@@ -135,11 +142,11 @@
   <button id="forwardBtn" disabled aria-label="Next image">→</button>
 </div>
 
-<div class="version-info">Version 1</div>
+<div class="version-info">Version 2</div>
 
 <script>
   // Increment version number with each change
-  // Current version: 1
+  // Current version: 2
   
   const baseURL = 'https://f003.backblazeb2.com/file/links-ref/';
   const imgElement = document.getElementById('mainImage');
@@ -155,7 +162,7 @@
   let historyStack = [];
   let forwardStack = [];
   const maxHistory = 5;
-  const maxPreload = 7; // Increased from 3 to 7
+  const maxPreload = 7;
 
   // Panning and zoom variables
   let isDragging = false;
@@ -167,23 +174,53 @@
   const maxScale = 4;
   const scaleStep = 0.2;
 
-  // Check if device is mobile
-  const isMobile = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent);
+  // Swipe detection variables
+  let touchStartX = 0;
+  let touchEndX = 0;
+  const swipeThreshold = 50;
 
-  // Prevent default drag behavior on desktop
-  if (!isMobile) {
+  // Check if running as PWA (homescreen app)
+  const isStandalone = window.matchMedia('(display-mode: standalone)').matches;
+  
+  // Enable zoom in PWA mode by forcing regular viewport behavior
+  if (isStandalone) {
+    const viewportMeta = document.querySelector('meta[name="viewport"]');
+    viewportMeta.content = viewportMeta.content.replace(/user-scalable=no/, 'user-scalable=yes');
+  }
+
+  // Mobile swipe gestures
+  imageContainer.addEventListener('touchstart', (e) => {
+    touchStartX = e.changedTouches[0].screenX;
+  }, { passive: true });
+
+  imageContainer.addEventListener('touchend', (e) => {
+    touchEndX = e.changedTouches[0].screenX;
+    handleSwipe();
+  }, { passive: true });
+
+  function handleSwipe() {
+    const deltaX = touchEndX - touchStartX;
+    if (Math.abs(deltaX) > swipeThreshold) {
+      if (deltaX > 0) {
+        navigateBack();
+      } else {
+        navigateForward();
+      }
+    }
+  }
+
+  // Desktop panning functionality
+  if (!isStandalone) {
     document.addEventListener('dragstart', (e) => {
       if (e.target === imgElement) {
         e.preventDefault();
       }
     });
 
-    // Disable context menu on image
     imgElement.addEventListener('contextmenu', (e) => {
       e.preventDefault();
     });
 
-    // Panning functionality (desktop only)
     imgElement.addEventListener('mousedown', startDrag);
     function startDrag(e) {
       e.preventDefault();
@@ -228,7 +265,7 @@
   }
 
   function zoomAtPosition(zoomDirection) {
-    if (isMobile) return; // Disable zoom on mobile
+    if (isStandalone) return; // Disable programmatic zoom in PWA mode
     
     const newScale = zoomDirection === 'in' 
       ? Math.min(scale + scaleStep, maxScale) 
@@ -256,6 +293,7 @@
     const url = `${baseURL}${subject}.txt`;
     try {
       const response = await fetch(url);
+      if (!response.ok) throw new Error('Network response was not ok');
       const text = await response.text();
       return text.trim().split('\n').filter(Boolean);
     } catch (err) {
@@ -271,9 +309,15 @@
       return;
     }
     sourceLists = {};
-    for (const subject of selected) {
-      sourceLists[subject] = await fetchLinksFor(subject);
-    }
+    
+    // Parallel fetching for faster loading
+    const fetchPromises = selected.map(subject => fetchLinksFor(subject));
+    const results = await Promise.all(fetchPromises);
+    
+    selected.forEach((subject, index) => {
+      sourceLists[subject] = results[index];
+    });
+    
     forwardStack = [];
     historyStack = [];
     showRandomImage();
@@ -288,43 +332,52 @@
     return { subject: chosenSubject, url: links[randomIndex], index: randomIndex };
   }
 
+  // Faster preloading using parallel loading
   function preloadForwardImages() {
     if (forwardStack.length > 0) return;
     
-    let preloadCount = 0;
     const tempForwardStack = [];
-
-    while (preloadCount < maxPreload) {
+    const preloadPromises = [];
+    
+    for (let i = 0; i < maxPreload; i++) {
       const image = getRandomImageSource();
       if (!image) break;
       
       const img = new Image();
-      img.onload = () => {
-        tempForwardStack.push(image);
-        if (tempForwardStack.length === maxPreload) {
-          forwardStack = tempForwardStack;
-          updateButtons();
-        }
-      };
+      const loadPromise = new Promise((resolve) => {
+        img.onload = () => {
+          tempForwardStack.push(image);
+          resolve();
+        };
+        img.onerror = resolve; // Continue even if some images fail
+      });
+      
       img.src = image.url;
-      preloadCount++;
+      preloadPromises.push(loadPromise);
     }
+    
+    Promise.all(preloadPromises).then(() => {
+      if (tempForwardStack.length > 0) {
+        forwardStack = tempForwardStack;
+        updateButtons();
+      }
+    });
   }
 
   function showImage(imageData) {
     const testImg = new Image();
     testImg.onload = function() {
-      // Check if image meets minimum size requirements
       if (this.naturalWidth >= 400 && this.naturalHeight >= 400) {
-        // Image is large enough - display it
         imgElement.src = imageData.url;
         imgElement.alt = `${imageData.subject} image`;
         currentImage = imageData;
         resetImagePosition();
-        preloadForwardImages();
+        
+        // Start preloading immediately after showing image
+        setTimeout(preloadForwardImages, 0);
+        
         updateButtons();
       } else {
-        // Image is too small - skip to next one
         console.log(`Skipping small image (${this.naturalWidth}x${this.naturalHeight}px):`, imageData.url);
         forwardStack = [];
         showRandomImage();
@@ -384,33 +437,50 @@
     }
   }
 
-  // Keyboard controls
-  document.addEventListener('keydown', (event) => {
-    if (['a', 'd', 'w', 's'].includes(event.key.toLowerCase())) {
-      event.preventDefault();
-    }
+  // Keyboard controls (desktop only)
+  if (!isStandalone) {
+    document.addEventListener('keydown', (event) => {
+      const key = event.key.toLowerCase();
+      if (['a', 'd', 'w', 's', 'r', 'f'].includes(key)) {
+        event.preventDefault();
+      }
 
-    switch (event.key.toLowerCase()) {
-      case 'a':
-        navigateBack();
-        break;
-      case 'd':
-        navigateForward();
-        break;
-      case 'w':
-        zoomAtPosition('in');
-        break;
-      case 's':
-        zoomAtPosition('out');
-        break;
-    }
-  });
+      switch (key) {
+        case 'a':
+          navigateBack();
+          break;
+        case 'd':
+          navigateForward();
+          break;
+        case 'w':
+          zoomAtPosition('in');
+          break;
+        case 's':
+          zoomAtPosition('out');
+          break;
+        case 'r':
+          resetImagePosition();
+          break;
+        case 'f':
+          toggleFlip();
+          break;
+      }
+    });
+  }
 
   // Category selection
   checkboxes.forEach(cb => {
     cb.addEventListener('change', () => {
       loadSelectedSources();
     });
+  });
+
+  // Initial load if any checkboxes are already checked
+  window.addEventListener('DOMContentLoaded', () => {
+    const anyChecked = Array.from(checkboxes).some(cb => cb.checked);
+    if (anyChecked) {
+      loadSelectedSources();
+    }
   });
 </script>
 </body>
