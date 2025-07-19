@@ -26,27 +26,37 @@
       overflow: hidden;
     }
     img {
-      width: 100vw;
-      height: 100vh;
+      width: auto;
+      height: auto;
+      max-width: 100vw;
+      max-height: 100vh;
       object-fit: contain;
       border: 3px solid #fff;
       border-radius: 8px;
+      position: absolute;
+      top: 50%;
+      left: 50%;
+      transform: translate(-50%, -50%) scale(1);
+      transform-origin: center;
+      cursor: default;
       user-select: none;
       -webkit-user-drag: none;
+      transition: transform 0.1s ease-out;
     }
     .controls {
       position: fixed;
-      bottom: 20px;
+      bottom: 10px;
       width: 100%;
       display: flex;
       justify-content: space-between;
       padding: 0 20px;
       box-sizing: border-box;
       pointer-events: none;
+      z-index: 1000;
     }
     .controls button {
-      font-size: 3em;
-      padding: 0.1em 0.3em;
+      font-size: 1.5em;
+      padding: 0.1em 0.5em;
       cursor: pointer;
       border-radius: 5px;
       border: none;
@@ -55,6 +65,7 @@
       user-select: none;
       transition: background 0.3s;
       pointer-events: auto;
+      margin: 0 5px;
     }
     .controls button:disabled {
       opacity: 0.3;
@@ -84,53 +95,21 @@
     .toggles input[type="checkbox"] {
       transform: scale(1.3);
     }
-    /* Desktop-only controls */
+    .version-info {
+      position: fixed;
+      bottom: 5px;
+      left: 50%;
+      transform: translateX(-50%);
+      font-size: 0.7em;
+      opacity: 0.5;
+    }
     @media (hover: hover) and (pointer: fine) {
+      /* Desktop-only styles */
       img {
-        width: auto;
-        height: auto;
-        max-width: 100vw;
-        max-height: 100vh;
-        position: absolute;
-        top: 50%;
-        left: 50%;
-        transform: translate(-50%, -50%) scale(1);
-        transform-origin: center;
         cursor: grab;
-        transition: transform 0.1s ease-out;
       }
       img:active {
         cursor: grabbing;
-      }
-      .top-controls {
-        position: fixed;
-        top: 60px;
-        right: 20px;
-        display: flex;
-        flex-direction: column;
-        gap: 10px;
-        z-index: 1000;
-        align-items: flex-end;
-      }
-      .top-controls button {
-        width: 36px;
-        height: 36px;
-        padding: 0;
-        font-size: 1.2em;
-        background: rgba(30,30,30,0.8);
-        color: #fff;
-        border: none;
-        border-radius: 50%;
-        cursor: pointer;
-        display: flex;
-        align-items: center;
-        justify-content: center;
-      }
-    }
-    /* Hide desktop controls on mobile */
-    @media (hover: none) and (pointer: coarse) {
-      .top-controls {
-        display: none;
       }
     }
   </style>
@@ -145,21 +124,23 @@
   <label><input type="checkbox" value="Walk">Walk</label>
 </div>
 
-<div class="top-controls">
-  <button id="resetBtn" title="Reset View">↻</button>
-  <button id="flipBtn" title="Flip Horizontal">↔</button>
-</div>
-
 <div class="image-container">
   <img id="mainImage" src="" alt="Random Image" draggable="false" />
 </div>
 
 <div class="controls">
-  <button id="backBtn" disabled aria-label="Previous image">A</button>
-  <button id="forwardBtn" disabled aria-label="Next image">D</button>
+  <button id="backBtn" disabled aria-label="Previous image">←</button>
+  <button id="resetBtn" aria-label="Reset zoom">↻</button>
+  <button id="flipBtn" aria-label="Flip horizontal">↔</button>
+  <button id="forwardBtn" disabled aria-label="Next image">→</button>
 </div>
 
+<div class="version-info">Version 1</div>
+
 <script>
+  // Increment version number with each change
+  // Current version: 1
+  
   const baseURL = 'https://f003.backblazeb2.com/file/links-ref/';
   const imgElement = document.getElementById('mainImage');
   const backBtn = document.getElementById('backBtn');
@@ -176,8 +157,7 @@
   const maxHistory = 5;
   const maxPreload = 7; // Increased from 3 to 7
 
-  // Desktop-only pan and zoom variables
-  let isDesktop = matchMedia('(hover: hover) and (pointer: fine)').matches;
+  // Panning and zoom variables
   let isDragging = false;
   let startPos = { x: 0, y: 0 };
   let translate = { x: 0, y: 0 };
@@ -187,17 +167,11 @@
   const maxScale = 4;
   const scaleStep = 0.2;
 
-  // Initialize based on device type
-  if (isDesktop) {
-    initDesktopControls();
-  } else {
-    // Enable native mobile zooming/panning
-    document.querySelector('meta[name="viewport"]').content = 'width=device-width, initial-scale=1, maximum-scale=5, user-scalable=yes';
-    imgElement.style.touchAction = 'pan-x pan-y pinch-zoom';
-  }
+  // Check if device is mobile
+  const isMobile = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent);
 
-  function initDesktopControls() {
-    // Prevent default drag behavior
+  // Prevent default drag behavior on desktop
+  if (!isMobile) {
     document.addEventListener('dragstart', (e) => {
       if (e.target === imgElement) {
         e.preventDefault();
@@ -209,12 +183,12 @@
       e.preventDefault();
     });
 
-    // Panning functionality
+    // Panning functionality (desktop only)
     imgElement.addEventListener('mousedown', startDrag);
     function startDrag(e) {
       e.preventDefault();
       isDragging = true;
-      startPos = getClientPos(e);
+      startPos = { x: e.clientX, y: e.clientY };
       imgElement.style.cursor = 'grabbing';
     }
 
@@ -223,7 +197,7 @@
       if (!isDragging) return;
       e.preventDefault();
       
-      const currentPos = getClientPos(e);
+      const currentPos = { x: e.clientX, y: e.clientY };
       translate.x += currentPos.x - startPos.x;
       translate.y += currentPos.y - startPos.y;
       startPos = currentPos;
@@ -236,65 +210,37 @@
       isDragging = false;
       imgElement.style.cursor = 'grab';
     }
+  }
 
-    function getClientPos(e) {
-      return {
-        x: e.clientX,
-        y: e.clientY
-      };
-    }
+  function updateImageTransform() {
+    const flipValue = isFlipped ? -1 : 1;
+    imgElement.style.transform = `
+      translate(calc(-50% + ${translate.x}px), calc(-50% + ${translate.y}px))
+      scale(${scale * flipValue}, ${scale})
+    `;
+  }
 
-    function updateImageTransform() {
-      const flipValue = isFlipped ? -1 : 1;
-      imgElement.style.transform = `
-        translate(calc(-50% + ${translate.x}px), calc(-50% + ${translate.y}px)) 
-        scale(${scale * flipValue}, ${scale})
-      `;
-    }
+  function resetImagePosition() {
+    translate = { x: 0, y: 0 };
+    scale = 1;
+    isFlipped = false;
+    updateImageTransform();
+  }
 
-    function resetImagePosition() {
-      translate = { x: 0, y: 0 };
-      scale = 1;
-      isFlipped = false;
-      updateImageTransform();
-    }
+  function zoomAtPosition(zoomDirection) {
+    if (isMobile) return; // Disable zoom on mobile
+    
+    const newScale = zoomDirection === 'in' 
+      ? Math.min(scale + scaleStep, maxScale) 
+      : Math.max(scale - scaleStep, minScale);
+    
+    scale = newScale;
+    updateImageTransform();
+  }
 
-    function flipHorizontal() {
-      isFlipped = !isFlipped;
-      updateImageTransform();
-    }
-
-    function zoomAtPosition(zoomDirection, clientX, clientY) {
-      const imgRect = imgElement.getBoundingClientRect();
-      
-      const x = clientX - imgRect.left;
-      const y = clientY - imgRect.top;
-      
-      const imgCenterX = imgRect.width / 2;
-      const imgCenterY = imgRect.height / 2;
-      
-      const imgX = x - imgCenterX - translate.x;
-      const imgY = y - imgCenterY - translate.y;
-      
-      const oldScale = scale;
-      scale = zoomDirection === 'in' 
-        ? Math.min(scale + scaleStep, maxScale) 
-        : Math.max(scale - scaleStep, minScale);
-      
-      translate.x -= (imgX * (scale / oldScale - 1));
-      translate.y -= (imgY * (scale / oldScale - 1));
-      
-      updateImageTransform();
-    }
-
-    // Desktop control event listeners
-    resetBtn.addEventListener('click', () => {
-      resetImagePosition();
-    });
-
-    flipBtn.addEventListener('click', () => {
-      flipHorizontal();
-    });
+  function toggleFlip() {
+    isFlipped = !isFlipped;
+    updateImageTransform();
   }
 
   function updateButtons() {
@@ -368,14 +314,17 @@
   function showImage(imageData) {
     const testImg = new Image();
     testImg.onload = function() {
+      // Check if image meets minimum size requirements
       if (this.naturalWidth >= 400 && this.naturalHeight >= 400) {
+        // Image is large enough - display it
         imgElement.src = imageData.url;
         imgElement.alt = `${imageData.subject} image`;
         currentImage = imageData;
-        if (isDesktop) resetImagePosition();
+        resetImagePosition();
         preloadForwardImages();
         updateButtons();
       } else {
+        // Image is too small - skip to next one
         console.log(`Skipping small image (${this.naturalWidth}x${this.naturalHeight}px):`, imageData.url);
         forwardStack = [];
         showRandomImage();
@@ -402,7 +351,12 @@
     }
   }
 
-  // Navigation functions
+  // Button event listeners
+  backBtn.addEventListener('click', navigateBack);
+  forwardBtn.addEventListener('click', navigateForward);
+  resetBtn.addEventListener('click', resetImagePosition);
+  flipBtn.addEventListener('click', toggleFlip);
+
   function navigateBack() {
     if (historyStack.length > 0) {
       if (currentImage) {
@@ -430,26 +384,13 @@
     }
   }
 
-  // Event listeners
-  backBtn.addEventListener('click', () => {
-    navigateBack();
-  });
-
-  forwardBtn.addEventListener('click', () => {
-    navigateForward();
-  });
-
+  // Keyboard controls
   document.addEventListener('keydown', (event) => {
-    const key = event.key.toLowerCase();
-    if (!['a', 'd', 'w', 's', 'r', 'f'].includes(key)) return;
-  
-    event.preventDefault();
-  
-    // Fallback to center of screen, since keydown has no mouse coordinates
-    const cursorX = window.innerWidth / 2;
-    const cursorY = window.innerHeight / 2;
-  
-    switch (key) {
+    if (['a', 'd', 'w', 's'].includes(event.key.toLowerCase())) {
+      event.preventDefault();
+    }
+
+    switch (event.key.toLowerCase()) {
       case 'a':
         navigateBack();
         break;
@@ -457,20 +398,15 @@
         navigateForward();
         break;
       case 'w':
-        if (isDesktop) zoomAtPosition('in', cursorX, cursorY);
+        zoomAtPosition('in');
         break;
       case 's':
-        if (isDesktop) zoomAtPosition('out', cursorX, cursorY);
-        break;
-      case 'r':
-        if (isDesktop) resetImagePosition();
-        break;
-      case 'f':
-        if (isDesktop) flipHorizontal();
+        zoomAtPosition('out');
         break;
     }
   });
 
+  // Category selection
   checkboxes.forEach(cb => {
     cb.addEventListener('change', () => {
       loadSelectedSources();
