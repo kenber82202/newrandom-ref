@@ -141,6 +141,7 @@
       border-radius: 15px;
       position: relative;
       cursor: ns-resize;
+      touch-action: none;
     }
     .zoom-slider-handle {
       width: 30px;
@@ -150,6 +151,7 @@
       position: absolute;
       left: 0;
       top: 15px;
+      touch-action: none;
     }
     .zoom-plus, .zoom-minus {
       font-size: 0.8em;
@@ -205,7 +207,7 @@
   let historyStack = [];
   let forwardStack = [];
   const maxHistory = 5;
-  const maxPreload = 3;
+  const maxPreload = 7; // Changed from 3 to 7
 
   // Panning and zoom variables
   let isDragging = false;
@@ -264,7 +266,7 @@
       const sliderHeight = zoomSlider.offsetHeight - zoomHandle.offsetHeight;
       let newTop = Math.min(Math.max(0, zoomHandleStartY + deltaY), sliderHeight);
       
-      // Calculate scale based on slider position (0 = max zoom out, sliderHeight = max zoom in)
+      // Calculate scale based on slider position
       scale = minScale + (newTop / sliderHeight) * (maxScale - minScale);
       zoomHandle.style.top = `${newTop}px`;
       updateImageTransform();
@@ -278,12 +280,15 @@
     isDragging = false;
     isZoomDragging = false;
     imgElement.style.cursor = 'grab';
+    document.body.style.cursor = '';
   }
 
-  // Zoom slider interaction
+  // Zoom slider interaction - updated for mobile support
   let zoomHandleStartY = 0;
   zoomHandle.addEventListener('mousedown', startZoomDrag);
+  zoomHandle.addEventListener('touchstart', startZoomDragTouch, { passive: false });
   zoomSlider.addEventListener('mousedown', startZoomDragFromArea);
+  zoomSlider.addEventListener('touchstart', startZoomDragFromAreaTouch, { passive: false });
 
   function startZoomDrag(e) {
     e.preventDefault();
@@ -291,6 +296,13 @@
     zoomStartY = e.clientY;
     zoomHandleStartY = parseInt(zoomHandle.style.top || '15');
     document.body.style.cursor = 'ns-resize';
+  }
+
+  function startZoomDragTouch(e) {
+    e.preventDefault();
+    isZoomDragging = true;
+    zoomStartY = e.touches[0].clientY;
+    zoomHandleStartY = parseInt(zoomHandle.style.top || '15');
   }
 
   function startZoomDragFromArea(e) {
@@ -306,6 +318,20 @@
     scale = minScale + (newTop / (zoomSlider.offsetHeight - zoomHandle.offsetHeight)) * (maxScale - minScale);
     updateImageTransform();
     document.body.style.cursor = 'ns-resize';
+  }
+
+  function startZoomDragFromAreaTouch(e) {
+    if (e.target !== zoomSlider) return;
+    e.preventDefault();
+    isZoomDragging = true;
+    zoomStartY = e.touches[0].clientY;
+    const rect = zoomSlider.getBoundingClientRect();
+    const clickY = e.touches[0].clientY - rect.top;
+    const newTop = Math.min(Math.max(0, clickY - zoomHandle.offsetHeight/2), zoomSlider.offsetHeight - zoomHandle.offsetHeight);
+    zoomHandle.style.top = `${newTop}px`;
+    zoomHandleStartY = newTop;
+    scale = minScale + (newTop / (zoomSlider.offsetHeight - zoomHandle.offsetHeight)) * (maxScale - minScale);
+    updateImageTransform();
   }
 
   function updateZoomSliderPosition() {
