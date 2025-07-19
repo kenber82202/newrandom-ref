@@ -253,27 +253,33 @@ function handleTouchMove(e) {
     translate.x = e.touches[0].clientX - startPos.x;
     translate.y = e.touches[0].clientY - startPos.y;
     updateImageTransform();
+    e.preventDefault();
   } else if (e.touches.length === 2) {
     const newDist = getTouchDistance(e.touches);
-    if (lastTouchDistance != null) {
+    const midX = (e.touches[0].clientX + e.touches[1].clientX) / 2;
+    const midY = (e.touches[0].clientY + e.touches[1].clientY) / 2;
+
+    if (lastTouchDistance !== null) {
       const deltaDist = newDist - lastTouchDistance;
       const zoomFactor = 0.005;
       const newScale = Math.min(maxScale, Math.max(minScale, scale + deltaDist * zoomFactor));
+      
       if (newScale !== scale) {
+        const rect = imgElement.getBoundingClientRect();
+        const offsetX = midX - rect.left;
+        const offsetY = midY - rect.top;
+        const dx = offsetX - rect.width / 2;
+        const dy = offsetY - rect.height / 2;
+
+        translate.x -= dx * (newScale - scale) / scale;
+        translate.y -= dy * (newScale - scale) / scale;
         scale = newScale;
         updateImageTransform();
       }
     }
-    lastTouchDistance = newDist;
-  }
-  e.preventDefault();
-}
 
-function handleTouchEnd(e) {
-  isDragging = false;
-  imgElement.style.cursor = 'grab';
-  if (e.touches.length < 2) {
-    lastTouchDistance = null;
+    lastTouchDistance = newDist;
+    e.preventDefault();
   }
 }
 
