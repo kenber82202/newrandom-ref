@@ -51,15 +51,15 @@
       bottom: 10px;
       width: 100%;
       display: flex;
-      justify-content: space-between;
-      padding: 0 20px;
+      justify-content: center;
+      gap: 10px;
       box-sizing: border-box;
       pointer-events: none;
       z-index: 1000;
     }
-    .controls button {
-      font-size: 1.5em;
-      padding: 0.1em 0.5em;
+    .controls button, .extra-controls button {
+      font-size: 1.2em;
+      padding: 0.2em 0.6em;
       cursor: pointer;
       border-radius: 5px;
       border: none;
@@ -68,14 +68,13 @@
       user-select: none;
       transition: background 0.3s;
       pointer-events: auto;
-      margin: 0 5px;
+    }
+    .controls button:hover:not(:disabled), .extra-controls button:hover {
+      background: rgba(70,70,70,0.9);
     }
     .controls button:disabled {
       opacity: 0.3;
       cursor: default;
-    }
-    .controls button:hover:not(:disabled) {
-      background: rgba(70,70,70,0.9);
     }
     .toggles {
       position: fixed;
@@ -102,14 +101,24 @@
     .toggles input[type="checkbox"] {
       transform: scale(1.3);
     }
-    .toggles input[type="text"] {
-      padding: 3px;
-      font-size: 0.8em;
+    .search-bar {
+      position: fixed;
+      top: 10px;
+      left: 10px;
+      z-index: 1002;
+    }
+    .search-bar input {
+      padding: 5px;
       border-radius: 5px;
       border: 1px solid #666;
-      background: #111;
-      color: #fff;
-      width: 120px;
+      font-size: 0.9em;
+    }
+    .extra-controls {
+      position: fixed;
+      bottom: 60px;
+      display: flex;
+      gap: 10px;
+      z-index: 1001;
     }
     .version-info {
       position: fixed;
@@ -118,18 +127,37 @@
       transform: translateX(-50%);
       font-size: 0.7em;
       opacity: 0.5;
+      z-index: 1001;
+    }
+    .ui-toggle {
+      position: fixed;
+      top: 10px;
+      right: 10px;
+      z-index: 1003;
+      background: rgba(30,30,30,0.8);
+      padding: 5px 10px;
+      border-radius: 6px;
+      cursor: pointer;
+      color: #fff;
     }
     @media (hover: hover) and (pointer: fine) {
-      img {
-        cursor: grab;
-      }
-      img:active {
-        cursor: grabbing;
-      }
+      img { cursor: grab; }
+      img:active { cursor: grabbing; }
+    }
+    .hidden-ui .controls,
+    .hidden-ui .toggles,
+    .hidden-ui .search-bar,
+    .hidden-ui .extra-controls,
+    .hidden-ui .version-info {
+      display: none !important;
     }
   </style>
 </head>
 <body>
+
+<div class="search-bar">
+  <input type="text" id="searchInput" placeholder="Search (#tag1#tag2)">
+</div>
 
 <div class="toggles">
   <label><input type="checkbox" value="People">P</label>
@@ -145,9 +173,6 @@
   <label><input type="checkbox" value="Urasawa">U+</label>
   <label><input type="checkbox" value="Asano">A</label>
   <label><input type="checkbox" value="Isayama">I</label>
-
-  <!-- 🔎 Search box -->
-  <input type="text" id="searchInput" placeholder="Search (# = and)">
 </div>
 
 <div class="image-container">
@@ -161,7 +186,14 @@
   <button id="forwardBtn" disabled aria-label="Next image">→</button>
 </div>
 
+<div class="extra-controls">
+  <button id="openBtn" aria-label="Open in new tab">🔗</button>
+  <button id="saveBtn" aria-label="Save image">💾</button>
+  <button id="copyBtn" aria-label="Copy link">📋</button>
+</div>
+
 <div class="version-info">Version 3</div>
+<div class="ui-toggle" id="uiToggle">☰</div>
 
 <script>
   const baseURL = 'https://f003.backblazeb2.com/file/links-ref/';
@@ -171,8 +203,12 @@
   const resetBtn = document.getElementById('resetBtn');
   const flipBtn = document.getElementById('flipBtn');
   const checkboxes = document.querySelectorAll('.toggles input[type="checkbox"]');
-  const searchInput = document.getElementById('searchInput');
   const imageContainer = document.querySelector('.image-container');
+  const searchInput = document.getElementById('searchInput');
+  const openBtn = document.getElementById('openBtn');
+  const saveBtn = document.getElementById('saveBtn');
+  const copyBtn = document.getElementById('copyBtn');
+  const uiToggle = document.getElementById('uiToggle');
 
   let sourceLists = {};
   let currentImage = null;
@@ -181,7 +217,6 @@
   const maxHistory = 5;
   const maxPreload = 7;
 
-  // Panning and zoom
   let isDragging = false;
   let startPos = { x: 0, y: 0 };
   let translate = { x: 0, y: 0 };
@@ -191,166 +226,131 @@
   const maxScale = 4;
   const scaleStep = 0.2;
 
-  // Swipe detection
   let touchStartX = 0;
   let touchEndX = 0;
   const swipeThreshold = 50;
 
   const isStandalone = window.matchMedia('(display-mode: standalone)').matches;
-
   if (isStandalone) {
     const viewportMeta = document.querySelector('meta[name="viewport"]');
     viewportMeta.content = viewportMeta.content.replace(/user-scalable=no/, 'user-scalable=yes');
   }
 
-  imageContainer.addEventListener('touchstart', (e) => {
-    touchStartX = e.changedTouches[0].screenX;
-  }, { passive: true });
-
-  imageContainer.addEventListener('touchend', (e) => {
-    touchEndX = e.changedTouches[0].screenX;
-    handleSwipe();
-  }, { passive: true });
+  // Swipe
+  imageContainer.addEventListener('touchstart', (e) => { touchStartX = e.changedTouches[0].screenX; }, { passive: true });
+  imageContainer.addEventListener('touchend', (e) => { touchEndX = e.changedTouches[0].screenX; handleSwipe(); }, { passive: true });
 
   function handleSwipe() {
     const deltaX = touchEndX - touchStartX;
     if (Math.abs(deltaX) > swipeThreshold) {
-      if (deltaX > 0) navigateBack();
-      else navigateForward();
+      if (deltaX > 0) navigateBack(); else navigateForward();
     }
   }
 
-  if (!isStandalone) {
-    document.addEventListener('dragstart', (e) => { if (e.target === imgElement) e.preventDefault(); });
-    imgElement.addEventListener('contextmenu', (e) => e.preventDefault());
-
-    imgElement.addEventListener('mousedown', (e) => {
-      e.preventDefault();
-      isDragging = true;
-      startPos = { x: e.clientX, y: e.clientY };
-      imgElement.style.cursor = 'grabbing';
-    });
-
-    document.addEventListener('mousemove', (e) => {
-      if (!isDragging) return;
-      e.preventDefault();
-      const currentPos = { x: e.clientX, y: e.clientY };
-      translate.x += currentPos.x - startPos.x;
-      translate.y += currentPos.y - startPos.y;
-      startPos = currentPos;
-      updateImageTransform();
-    });
-
-    document.addEventListener('mouseup', () => {
-      isDragging = false;
-      imgElement.style.cursor = 'grab';
-    });
+  // Dragging
+  document.addEventListener('dragstart', e => { if (e.target === imgElement) e.preventDefault(); });
+  imgElement.addEventListener('contextmenu', e => e.preventDefault());
+  imgElement.addEventListener('mousedown', startDrag);
+  function startDrag(e) {
+    e.preventDefault();
+    isDragging = true;
+    startPos = { x: e.clientX, y: e.clientY };
+    imgElement.style.cursor = 'grabbing';
   }
+  document.addEventListener('mousemove', drag);
+  function drag(e) {
+    if (!isDragging) return;
+    e.preventDefault();
+    const currentPos = { x: e.clientX, y: e.clientY };
+    translate.x += currentPos.x - startPos.x;
+    translate.y += currentPos.y - startPos.y;
+    startPos = currentPos;
+    updateImageTransform();
+  }
+  document.addEventListener('mouseup', () => { isDragging = false; imgElement.style.cursor = 'grab'; });
 
+  // Transform
   function updateImageTransform() {
     const flipValue = isFlipped ? -1 : 1;
-    imgElement.style.transform = `
-      translate(calc(-50% + ${translate.x}px), calc(-50% + ${translate.y}px))
-      scale(${scale * flipValue}, ${scale})
-    `;
+    imgElement.style.transform =
+      `translate(calc(-50% + ${translate.x}px), calc(-50% + ${translate.y}px)) scale(${scale * flipValue}, ${scale})`;
   }
-
-  function resetImagePosition() {
-    translate = { x: 0, y: 0 };
-    scale = 1;
-    isFlipped = false;
-    updateImageTransform();
-  }
-
-  function zoomAtPosition(zoomDirection) {
+  function resetImagePosition() { translate = { x: 0, y: 0 }; scale = 1; isFlipped = false; updateImageTransform(); }
+  function zoomAtPosition(dir) {
     if (isStandalone) return;
-    const newScale = zoomDirection === 'in' 
-      ? Math.min(scale + scaleStep, maxScale) 
-      : Math.max(scale - scaleStep, minScale);
-    scale = newScale;
-    updateImageTransform();
+    const newScale = dir === 'in' ? Math.min(scale + scaleStep, maxScale) : Math.max(scale - scaleStep, minScale);
+    scale = newScale; updateImageTransform();
   }
+  function toggleFlip() { isFlipped = !isFlipped; updateImageTransform(); }
 
-  function toggleFlip() {
-    isFlipped = !isFlipped;
-    updateImageTransform();
-  }
+  // Buttons
+  resetBtn.addEventListener('click', resetImagePosition);
+  flipBtn.addEventListener('click', toggleFlip);
+  backBtn.addEventListener('click', navigateBack);
+  forwardBtn.addEventListener('click', navigateForward);
+
+  openBtn.addEventListener('click', () => { if (currentImage) window.open(currentImage.url, '_blank'); });
+  saveBtn.addEventListener('click', () => { if (currentImage) { const a = document.createElement('a'); a.href = currentImage.url; a.download = 'image.jpg'; a.click(); } });
+  copyBtn.addEventListener('click', () => { if (currentImage) { navigator.clipboard.writeText(currentImage.url); alert("Link copied!"); } });
+
+  uiToggle.addEventListener('click', () => { document.body.classList.toggle('hidden-ui'); });
 
   function updateButtons() {
     backBtn.disabled = historyStack.length === 0;
     forwardBtn.disabled = forwardStack.length === 0;
   }
 
-  function getSelectedSources() {
-    return [...checkboxes].filter(cb => cb.checked).map(cb => cb.value);
-  }
-
-  function filterBySearch(links) {
-    const query = searchInput.value.trim();
-    if (!query) return links;
-    const terms = query.split('#').map(t => t.trim().toLowerCase()).filter(Boolean);
-    return links.filter(line => {
-      const lowerLine = line.toLowerCase();
-      return terms.every(term => lowerLine.includes(term));
-    });
-  }
+  function getSelectedSources() { return [...checkboxes].filter(cb => cb.checked).map(cb => cb.value); }
 
   async function fetchLinksFor(subject) {
     const url = `${baseURL}${subject}.txt`;
     try {
       const response = await fetch(url);
-      if (!response.ok) throw new Error('Network response was not ok');
+      if (!response.ok) throw new Error('Network response not ok');
       const text = await response.text();
-      const allLinks = text.trim().split('\n').filter(Boolean);
-      return filterBySearch(allLinks);
+      return text.trim().split('\n').filter(Boolean);
     } catch (err) {
-      console.error(`Failed to fetch ${subject}:`, err);
+      console.error(`Failed ${subject}:`, err);
       return [];
     }
   }
 
   async function loadSelectedSources() {
     const selected = getSelectedSources();
-    if (selected.length === 0) return;
+    if (selected.length === 0) { alert("Please select at least one subject."); return; }
     sourceLists = {};
-    const fetchPromises = selected.map(subject => fetchLinksFor(subject));
+    const fetchPromises = selected.map(s => fetchLinksFor(s));
     const results = await Promise.all(fetchPromises);
-    selected.forEach((subject, index) => { sourceLists[subject] = results[index]; });
-    forwardStack = [];
-    historyStack = [];
-    showRandomImage();
+    selected.forEach((s, i) => { sourceLists[s] = results[i]; });
+    historyStack = []; forwardStack = []; showRandomImage();
+  }
+
+  function filterBySearch(list) {
+    const query = searchInput.value.trim();
+    if (!query) return list;
+    const tags = query.split('#').map(s => s.trim().toLowerCase()).filter(Boolean);
+    return list.filter(line => tags.every(t => line.toLowerCase().includes(t)));
   }
 
   function getRandomImageSource() {
     const subjects = Object.keys(sourceLists).filter(k => sourceLists[k].length > 0);
-    if (subjects.length === 0) return null;
+    if (!subjects.length) return null;
     const chosenSubject = subjects[Math.floor(Math.random() * subjects.length)];
-    const links = sourceLists[chosenSubject];
+    const links = filterBySearch(sourceLists[chosenSubject]);
+    if (!links.length) return null;
     const randomIndex = Math.floor(Math.random() * links.length);
     return { subject: chosenSubject, url: links[randomIndex], index: randomIndex };
   }
 
   function preloadForwardImages() {
     if (forwardStack.length > 0) return;
-    const tempForwardStack = [];
-    const preloadPromises = [];
+    const temp = [], promises = [];
     for (let i = 0; i < maxPreload; i++) {
-      const image = getRandomImageSource();
-      if (!image) break;
+      const image = getRandomImageSource(); if (!image) break;
       const img = new Image();
-      const loadPromise = new Promise((resolve) => {
-        img.onload = () => { tempForwardStack.push(image); resolve(); };
-        img.onerror = resolve;
-      });
-      img.src = image.url;
-      preloadPromises.push(loadPromise);
+      promises.push(new Promise(res => { img.onload = () => { temp.push(image); res(); }; img.onerror = res; img.src = image.url; }));
     }
-    Promise.all(preloadPromises).then(() => {
-      if (tempForwardStack.length > 0) {
-        forwardStack = tempForwardStack;
-        updateButtons();
-      }
-    });
+    Promise.all(promises).then(() => { if (temp.length) { forwardStack = temp; updateButtons(); } });
   }
 
   function showImage(imageData) {
@@ -358,87 +358,58 @@
     testImg.onload = function() {
       if (this.naturalWidth >= 400 && this.naturalHeight >= 400) {
         imgElement.src = imageData.url;
-        imgElement.alt = `${imageData.subject} image`;
         currentImage = imageData;
         resetImagePosition();
         setTimeout(preloadForwardImages, 0);
         updateButtons();
-      } else {
-        forwardStack = [];
-        showRandomImage();
-      }
+      } else { forwardStack = []; showRandomImage(); }
     };
-    testImg.onerror = function() {
-      forwardStack = [];
-      showRandomImage();
-    };
+    testImg.onerror = function() { forwardStack = []; showRandomImage(); };
     testImg.src = imageData.url;
   }
 
   function showRandomImage() {
     const image = getRandomImageSource();
     if (image) {
-      if (currentImage) {
-        historyStack.push(currentImage);
-        if (historyStack.length > maxHistory) historyStack.shift();
-      }
+      if (currentImage) { historyStack.push(currentImage); if (historyStack.length > maxHistory) historyStack.shift(); }
       showImage(image);
-    } else {
-      imgElement.alt = "No images loaded.";
-    }
+    } else { imgElement.alt = "No images found."; }
   }
-
-  backBtn.addEventListener('click', navigateBack);
-  forwardBtn.addEventListener('click', navigateForward);
-  resetBtn.addEventListener('click', resetImagePosition);
-  flipBtn.addEventListener('click', toggleFlip);
 
   function navigateBack() {
-    if (historyStack.length > 0) {
-      if (currentImage) {
-        forwardStack.unshift(currentImage);
-        if (forwardStack.length > maxPreload) forwardStack.pop();
-      }
-      const prev = historyStack.pop();
-      showImage(prev);
+    if (historyStack.length) {
+      if (currentImage) { forwardStack.unshift(currentImage); if (forwardStack.length > maxPreload) forwardStack.pop(); }
+      const prev = historyStack.pop(); showImage(prev);
     }
   }
-
   function navigateForward() {
-    if (forwardStack.length > 0) {
-      if (currentImage) {
-        historyStack.push(currentImage);
-        if (historyStack.length > maxHistory) historyStack.shift();
-      }
-      const next = forwardStack.shift();
-      showImage(next);
+    if (forwardStack.length) {
+      if (currentImage) { historyStack.push(currentImage); if (historyStack.length > maxHistory) historyStack.shift(); }
+      const next = forwardStack.shift(); showImage(next);
       if (forwardStack.length < 2) preloadForwardImages();
-    } else {
-      showRandomImage();
+    } else { showRandomImage(); }
+  }
+
+  // Keyboard hotkeys (disabled when typing in search)
+  document.addEventListener('keydown', (event) => {
+    if (document.activeElement === searchInput) return;
+    const key = event.key.toLowerCase();
+    if (['a','d','w','s','r','f'].includes(key)) event.preventDefault();
+    switch (key) {
+      case 'a': navigateBack(); break;
+      case 'd': navigateForward(); break;
+      case 'w': zoomAtPosition('in'); break;
+      case 's': zoomAtPosition('out'); break;
+      case 'r': resetImagePosition(); break;
+      case 'f': toggleFlip(); break;
     }
-  }
-
-  if (!isStandalone) {
-    document.addEventListener('keydown', (event) => {
-      const key = event.key.toLowerCase();
-      if (['a', 'd', 'w', 's', 'r', 'f'].includes(key)) event.preventDefault();
-      switch (key) {
-        case 'a': navigateBack(); break;
-        case 'd': navigateForward(); break;
-        case 'w': zoomAtPosition('in'); break;
-        case 's': zoomAtPosition('out'); break;
-        case 'r': resetImagePosition(); break;
-        case 'f': toggleFlip(); break;
-      }
-    });
-  }
-
-  checkboxes.forEach(cb => cb.addEventListener('change', loadSelectedSources));
-  searchInput.addEventListener('input', loadSelectedSources);
-
-  window.addEventListener('DOMContentLoaded', () => {
-    if (Array.from(checkboxes).some(cb => cb.checked)) loadSelectedSources();
   });
+
+  // React to checkboxes + search
+  checkboxes.forEach(cb => cb.addEventListener('change', loadSelectedSources));
+  searchInput.addEventListener('input', () => { if (getSelectedSources().length) loadSelectedSources(); });
+
+  window.addEventListener('DOMContentLoaded', () => { if ([...checkboxes].some(cb => cb.checked)) loadSelectedSources(); });
 </script>
 </body>
 </html>
