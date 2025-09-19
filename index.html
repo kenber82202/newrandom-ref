@@ -330,7 +330,7 @@
     const query = searchInput.value.trim();
     if (!query) return list;
     const tags = query.split('#').map(s => s.trim().toLowerCase()).filter(Boolean);
-    return list.filter(line => tags.every(t => line.toLowerCase().includes(t)));
+    return list.filter(line => tags.some(t => line.toLowerCase().includes(t)));
   }
 
   function getRandomImageSource() {
