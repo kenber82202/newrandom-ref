@@ -151,6 +151,37 @@
     .hidden-ui .version-info {
       display: none !important;
     }
+
+    /* Overlay navigation buttons */
+    .nav-buttons {
+      position: fixed;
+      top: 50%;
+      width: 100%;
+      display: flex;
+      justify-content: space-between;
+      transform: translateY(-50%);
+      pointer-events: none;
+      z-index: 2000;
+    }
+    .nav-buttons button {
+      pointer-events: auto;
+      font-size: 2em;
+      background: rgba(0,0,0,0.6);
+      border: none;
+      color: white;
+      padding: 0.5em 0.7em;
+      border-radius: 50%;
+      margin: 0 10px;
+      cursor: pointer;
+      transition: background 0.3s;
+    }
+    .nav-buttons button:hover {
+      background: rgba(70,70,70,0.9);
+    }
+    .nav-buttons button:disabled {
+      opacity: 0.4;
+      cursor: default;
+    }
   </style>
 </head>
 <body>
@@ -180,11 +211,15 @@
   <img id="mainImage" src="" alt="Random Image" draggable="false" />
 </div>
 
-<div class="controls">
+<!-- Overlay nav buttons -->
+<div class="nav-buttons">
   <button id="backBtn" disabled aria-label="Previous image">←</button>
+  <button id="forwardBtn" disabled aria-label="Next image">→</button>
+</div>
+
+<div class="controls">
   <button id="resetBtn" aria-label="Reset zoom">↻</button>
   <button id="flipBtn" aria-label="Flip horizontal">↔</button>
-  <button id="forwardBtn" disabled aria-label="Next image">→</button>
 </div>
 
 <div class="extra-controls">
@@ -227,25 +262,10 @@
   const maxScale = 4;
   const scaleStep = 0.2;
 
-  let touchStartX = 0;
-  let touchEndX = 0;
-  const swipeThreshold = 50;
-
   const isStandalone = window.matchMedia('(display-mode: standalone)').matches;
   if (isStandalone) {
     const viewportMeta = document.querySelector('meta[name="viewport"]');
     viewportMeta.content = viewportMeta.content.replace(/user-scalable=no/, 'user-scalable=yes');
-  }
-
-  // Swipe
-  imageContainer.addEventListener('touchstart', (e) => { touchStartX = e.changedTouches[0].screenX; }, { passive: true });
-  imageContainer.addEventListener('touchend', (e) => { touchEndX = e.changedTouches[0].screenX; handleSwipe(); }, { passive: true });
-
-  function handleSwipe() {
-    const deltaX = touchEndX - touchStartX;
-    if (Math.abs(deltaX) > swipeThreshold) {
-      if (deltaX > 0) navigateBack(); else navigateForward();
-    }
   }
 
   // Dragging
