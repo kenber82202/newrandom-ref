@@ -16,39 +16,24 @@
   body.hide-ui #topControls,
   body.hide-ui .toggles,
   body.hide-ui .search-bar,
-  body.hide-ui .controls {
-    display:none;
-  }
+  body.hide-ui .controls { display:none; }
 
   #instancesContainer {
     margin-top:50px;width:100%;height:100%;
     display:flex;flex-direction:column;gap:5px;
   }
   .row{display:flex;width:100%;gap:5px;}
-  .instance{
-    position:relative;width:100%;flex:1;display:flex;flex-direction:column;
-  }
-  .image-wrapper{
-    flex:1;display:flex;align-items:center;justify-content:center;
-    position:relative;overflow:hidden;
-  }
+  .instance{position:relative;width:100%;flex:1;display:flex;flex-direction:column;}
+  .image-wrapper{flex:1;display:flex;align-items:center;justify-content:center;position:relative;overflow:hidden;}
   .instance img{
     max-width:100%;max-height:100%;
     position:absolute;top:50%;left:50%;
     transform:translate(-50%,-50%) scale(1);
     object-fit:contain;border:2px solid #fff;border-radius:6px;
-    transition:transform 0.1s ease-out;user-select:none;
   }
-
   .nav-arrow{
-    position:absolute;top:50%;
-    transform:translateY(-50%);
-    font-size:48px;
-    color:white;
-    opacity:0.5;
-    cursor:pointer;
-    user-select:none;
-    z-index:20;
+    position:absolute;top:50%;transform:translateY(-50%);
+    font-size:48px;color:white;opacity:0.5;cursor:pointer;z-index:20;
   }
   .nav-arrow.left{left:10px;}
   .nav-arrow.right{right:10px;}
@@ -80,7 +65,7 @@
 
 <script>
 const baseURL='https://f003.backblazeb2.com/file/links-ref/';
-const hotkeys={1:{flip:'f',reset:'r'},2:{flip:'g',reset:'t'},3:{flip:'h',reset:'y'}};
+const IMAGE_EXT=/\.(jpg|jpeg|png|webp|gif|avif|bmp)$/i;
 let instances=[];
 
 const categories=[
@@ -92,14 +77,14 @@ const categories=[
 ];
 
 class ImageInstance{
-  constructor(id,hotkeys){
-    this.id=id;this.hotkeys=hotkeys;
-    this.scale=1;this.isFlipped=false;this.translate={x:0,y:0};
+  constructor(){
+    this.history=[];
+    this.future=[];
+    this.preloadQueue=[];
+    this.maxHistory=4;
+    this.maxFuture=4;
+    this.maxPreload=8;
     this.sourceLists={};
-
-    this.history=[];this.future=[];this.preloadQueue=[];
-    this.maxHistory=4;this.maxPreload=8;
-
     this.createUI();
   }
 
@@ -117,49 +102,25 @@ class ImageInstance{
         <img draggable="false">
       </div>
       <div class="controls">
-        <button class="flipBtn">Flip</button>
         <button class="resetBtn">Reset</button>
       </div>`;
-
     this.img=this.el.querySelector('img');
     this.el.querySelector('.left').onclick=()=>this.back();
     this.el.querySelector('.right').onclick=()=>this.forward();
-    this.el.querySelector('.flipBtn').onclick=()=>this.flip();
     this.el.querySelector('.resetBtn').onclick=()=>this.reset();
-
     this.search=this.el.querySelector('input');
     this.checks=this.el.querySelectorAll('input[type=checkbox]');
     this.checks.forEach(c=>c.onchange=()=>this.reloadSources());
     this.search.oninput=()=>this.reloadSources();
-
-    this.drag();
   }
 
-  drag(){
-    let d=false,s={x:0,y:0};
-    this.img.onmousedown=e=>{d=true;s={x:e.clientX,y:e.clientY}};
-    document.onmousemove=e=>{
-      if(!d)return;
-      this.translate.x+=e.clientX-s.x;
-      this.translate.y+=e.clientY-s.y;
-      s={x:e.clientX,y:e.clientY};
-      this.apply();
-    };
-    document.onmouseup=()=>d=false;
-  }
-
-  apply(){
-    const f=this.isFlipped?-1:1;
-    this.img.style.transform=
-      `translate(calc(-50% + ${this.translate.x}px),calc(-50% + ${this.translate.y}px)) scale(${f*this.scale},${this.scale})`;
-  }
-
-  reset(){this.scale=1;this.isFlipped=false;this.translate={x:0,y:0};this.apply();}
-  flip(){this.isFlipped=!this.isFlipped;this.apply();}
+  reset(){this.img.style.transform='translate(-50%,-50%) scale(1)';}
 
   async fetchLinks(s){
-    try{const r=await fetch(`${baseURL}${s}.txt`);
-      return (await r.text()).split('\n').filter(Boolean);}catch{return []}
+    try{
+      const r=await fetch(`${baseURL}${s}.txt`);
+      return (await r.text()).split('\n').map(l=>l.trim()).filter(l=>IMAGE_EXT.test(l));
+    }catch{return []}
   }
 
   async reloadSources(){
@@ -168,32 +129,45 @@ class ImageInstance{
     const res=await Promise.all(sel.map(s=>this.fetchLinks(s)));
     this.sourceLists=Object.fromEntries(sel.map((s,i)=>[s,res[i]]));
     this.history=[];this.future=[];this.preloadQueue=[];
-    this.forward();
+    this.forward(true);
   }
 
-  randomSource(){
-    const k=Object.keys(this.sourceLists);
-    if(!k.length)return null;
-    const s=k[Math.floor(Math.random()*k.length)];
-    const l=this.sourceLists[s];
-    return l[Math.floor(Math.random()*l.length)];
+  randomImage(){
+    const keys=Object.keys(this.sourceLists);
+    if(!keys.length)return null;
+    const k=keys[Math.floor(Math.random()*keys.length)];
+    const list=this.sourceLists[k];
+    return list[Math.floor(Math.random()*list.length)];
   }
 
   preload(){
+    const used=new Set([...this.history,this.img.src,...this.future,...this.preloadQueue]);
     while(this.preloadQueue.length<this.maxPreload){
-      const u=this.randomSource();
-      if(!u)break;
-      const img=new Image();img.src=u;
+      const u=this.randomImage();
+      if(!u||used.has(u))break;
+      used.add(u);
+      const i=new Image();i.decoding='async';i.src=u;
       this.preloadQueue.push(u);
     }
   }
 
   show(url){this.img.src=url;this.reset();}
 
-  forward(){
-    if(this.img.src)this.history.push(this.img.src);
-    if(this.history.length>this.maxHistory)this.history.shift();
-    const next=this.future.shift()||this.preloadQueue.shift()||this.randomSource();
+  forward(force=false){
+    if(!force && this.future.length){
+      const next=this.future.shift();
+      this.history.push(this.img.src);
+      if(this.history.length>this.maxHistory)this.history.shift();
+      this.show(next);
+      return;
+    }
+
+    if(this.img.src){
+      this.history.push(this.img.src);
+      if(this.history.length>this.maxHistory)this.history.shift();
+    }
+
+    const next=this.preloadQueue.shift()||this.randomImage();
     if(next)this.show(next);
     this.future=[];
     this.preload();
@@ -202,42 +176,20 @@ class ImageInstance{
   back(){
     if(!this.history.length)return;
     this.future.unshift(this.img.src);
-    this.show(this.history.pop());
+    if(this.future.length>this.maxFuture)this.future.pop();
+    const prev=this.history.pop();
+    this.show(prev);
   }
 }
 
 function createInstances(n){
   const c=document.getElementById('instancesContainer');
   c.innerHTML='';instances=[];
-  for(let i=1;i<=n;i++)instances.push(new ImageInstance(i,hotkeys[i]));
-  applyLayout();
-}
-
-function applyLayout(){
-  const c=document.getElementById('instancesContainer');
-  c.innerHTML='';
-  const n=instances.length;
-  const on=document.getElementById('layoutToggle').checked;
-
-  if(!on||n===1){instances.forEach(i=>c.appendChild(i.el));return;}
-  if(n===2){
-    instances[0].el.style.flex='0 0 66%';
-    instances[1].el.style.flex='0 0 34%';
-    c.append(instances[0].el,instances[1].el);
-  }
-  if(n===3){
-    const t=document.createElement('div');t.style.flex='0 0 66%';
-    const b=document.createElement('div');b.className='row';b.style.flex='0 0 34%';
-    t.append(instances[0].el);
-    b.append(instances[1].el,instances[2].el);
-    c.append(t,b);
-  }
+  for(let i=0;i<n;i++){const inst=new ImageInstance();instances.push(inst);c.appendChild(inst.el);}
 }
 
 document.getElementById('instanceCount').onchange=e=>createInstances(+e.target.value);
-document.getElementById('layoutToggle').onchange=applyLayout;
 document.getElementById('hideUIBtn').onclick=()=>document.body.classList.toggle('hide-ui');
-
 document.addEventListener('keydown',e=>{
   if(e.key.toLowerCase()==='u')document.body.classList.toggle('hide-ui');
   if(e.key==='a')instances.forEach(i=>i.back());
