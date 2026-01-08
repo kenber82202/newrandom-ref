@@ -17,6 +17,11 @@
     margin-top:50px;width:100%;height:100%;
     display:flex;flex-direction:column;gap:5px;
   }
+  .row {
+    display:flex;
+    width:100%;
+    gap:5px;
+  }
   .instance {
     position:relative;width:100%;flex:1;display:flex;flex-direction:column;
   }
@@ -51,6 +56,9 @@
       <option value="2">2</option>
       <option value="3">3</option>
     </select>
+  </label>
+  <label>
+    <input type="checkbox" id="layoutToggle"> Custom Layout
   </label>
 </div>
 
@@ -89,8 +97,6 @@ class ImageInstance{
         <button class="flipBtn">Flip (${this.hotkeys.flip.toUpperCase()})</button>
         <button class="resetBtn">Reset (${this.hotkeys.reset.toUpperCase()})</button>
       </div>`;
-    document.getElementById('instancesContainer').appendChild(this.el);
-
     this.imgElement=this.el.querySelector('img');
     this.searchInput=this.el.querySelector('input');
     this.checkboxes=this.el.querySelectorAll('input[type=checkbox]');
@@ -123,9 +129,7 @@ class ImageInstance{
 
   resetImagePosition(){this.scale=1;this.isFlipped=false;this.translate={x:0,y:0};this.updateTransform();}
   flipImage(){this.isFlipped=!this.isFlipped;this.updateTransform();}
-
   async fetchLinksFor(subject){try{const r=await fetch(`${baseURL}${subject}.txt`);const t=await r.text();return t.trim().split('\n').filter(Boolean);}catch{return []}}
-
   async loadSelectedSources(){
     const sel=[...this.checkboxes].filter(c=>c.checked).map(c=>c.value);
     if(!sel.length)return;
@@ -133,20 +137,17 @@ class ImageInstance{
     this.sourceLists=Object.fromEntries(sel.map((s,i)=>[s,results[i]]));
     this.showRandomImage();
   }
-
   filterBySearch(list){
     const q=this.searchInput.value.trim().toLowerCase();if(!q)return list;
     const tags=q.split('#').map(s=>s.trim()).filter(Boolean);
     return list.filter(line=>tags.some(t=>line.toLowerCase().includes(t)));
   }
-
   getRandomImageSource(){
     const keys=Object.keys(this.sourceLists);if(!keys.length)return null;
     const chosen=keys[Math.floor(Math.random()*keys.length)];
     const links=this.filterBySearch(this.sourceLists[chosen]);if(!links.length)return null;
     return {subject:chosen,url:links[Math.floor(Math.random()*links.length)]};
   }
-
   showRandomImage(){
     const imgData=this.getRandomImageSource();if(!imgData)return;
     const test=new Image();test.onload=()=>{
@@ -155,19 +156,53 @@ class ImageInstance{
       }else this.showRandomImage();
     };test.onerror=()=>this.showRandomImage();test.src=imgData.url;
   }
-
   navigateForward(){this.showRandomImage();}
   navigateBack(){this.showRandomImage();}
 }
 
 function createInstances(count){
-  document.getElementById('instancesContainer').innerHTML='';
+  const c=document.getElementById('instancesContainer');
+  c.innerHTML='';
   instances=[];
-  for(let i=1;i<=count;i++){instances.push(new ImageInstance(i,hotkeys[i]));}
-  instances.forEach(inst=>inst.el.style.flex=`0 0 ${100/count}%`);
+  for(let i=1;i<=count;i++)instances.push(new ImageInstance(i,hotkeys[i]));
+  applyLayout();
+}
+
+function applyLayout(){
+  const c=document.getElementById('instancesContainer');
+  c.innerHTML='';
+  const count=instances.length;
+  const custom=document.getElementById('layoutToggle').checked;
+
+  if(!custom || count===1){
+    instances.forEach(i=>{i.el.style.flex='1';c.appendChild(i.el)});
+    return;
+  }
+
+  if(count===2){
+    instances[0].el.style.flex='0 0 66%';
+    instances[1].el.style.flex='0 0 34%';
+    c.append(instances[0].el,instances[1].el);
+  }
+
+  if(count===3){
+    const top=document.createElement('div');
+    top.style.flex='0 0 66%';
+    top.appendChild(instances[0].el);
+
+    const bottom=document.createElement('div');
+    bottom.className='row';
+    bottom.style.flex='0 0 34%';
+    instances[1].el.style.flex='1';
+    instances[2].el.style.flex='1';
+    bottom.append(instances[1].el,instances[2].el);
+
+    c.append(top,bottom);
+  }
 }
 
 document.getElementById('instanceCount').addEventListener('change',e=>createInstances(+e.target.value));
+document.getElementById('layoutToggle').addEventListener('change',applyLayout);
 
 document.addEventListener('keydown',e=>{
   const key=e.key.toLowerCase();
