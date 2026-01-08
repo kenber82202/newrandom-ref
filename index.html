@@ -19,33 +19,47 @@
   body.hide-ui .controls {
     display:none;
   }
+
   #instancesContainer {
     margin-top:50px;width:100%;height:100%;
     display:flex;flex-direction:column;gap:5px;
   }
-  .row {display:flex;width:100%;gap:5px;}
-  .instance {
+  .row{display:flex;width:100%;gap:5px;}
+  .instance{
     position:relative;width:100%;flex:1;display:flex;flex-direction:column;
   }
-  .image-wrapper {
-    flex:1;display:flex;align-items:center;justify-content:center;position:relative;
-    overflow:hidden;
+  .image-wrapper{
+    flex:1;display:flex;align-items:center;justify-content:center;
+    position:relative;overflow:hidden;
   }
-  .instance img {
+  .instance img{
     max-width:100%;max-height:100%;
     position:absolute;top:50%;left:50%;
     transform:translate(-50%,-50%) scale(1);
     object-fit:contain;border:2px solid #fff;border-radius:6px;
     transition:transform 0.1s ease-out;user-select:none;
   }
-  .toggles, .search-bar, .controls {
+
+  .nav-arrow{
+    position:absolute;top:50%;
+    transform:translateY(-50%);
+    font-size:48px;
+    color:white;
+    opacity:0.5;
+    cursor:pointer;
+    user-select:none;
+    z-index:20;
+  }
+  .nav-arrow.left{left:10px;}
+  .nav-arrow.right{right:10px;}
+
+  .toggles,.search-bar,.controls{
     position:absolute;z-index:10;background:rgba(0,0,0,0.5);
     padding:3px 5px;border-radius:4px;display:flex;gap:4px;flex-wrap:wrap;
   }
-  .toggles {top:5px;left:50%;transform:translateX(-50%);}
-  .search-bar {top:5px;left:5px;}
-  .controls {bottom:5px;left:50%;transform:translateX(-50%);}
-  .toggles label, .controls button {cursor:pointer;font-size:0.75em;}
+  .toggles{top:5px;left:50%;transform:translateX(-50%);}
+  .search-bar{top:5px;left:5px;}
+  .controls{bottom:5px;left:50%;transform:translateX(-50%);}
 </style>
 </head>
 <body>
@@ -83,11 +97,8 @@ class ImageInstance{
     this.scale=1;this.isFlipped=false;this.translate={x:0,y:0};
     this.sourceLists={};
 
-    this.history=[];
-    this.future=[];
-    this.preloadQueue=[];
-    this.maxHistory=4;
-    this.maxPreload=8;
+    this.history=[];this.future=[];this.preloadQueue=[];
+    this.maxHistory=4;this.maxPreload=8;
 
     this.createUI();
   }
@@ -100,18 +111,27 @@ class ImageInstance{
       <div class="toggles">
         ${categories.map(c=>`<label><input type="checkbox" value="${c.v}">${c.l}</label>`).join('')}
       </div>
-      <div class="image-wrapper"><img draggable="false"></div>
+      <div class="image-wrapper">
+        <div class="nav-arrow left">&#10094;</div>
+        <div class="nav-arrow right">&#10095;</div>
+        <img draggable="false">
+      </div>
       <div class="controls">
         <button class="flipBtn">Flip</button>
         <button class="resetBtn">Reset</button>
       </div>`;
+
     this.img=this.el.querySelector('img');
-    this.search=this.el.querySelector('input');
-    this.checks=this.el.querySelectorAll('input[type=checkbox]');
+    this.el.querySelector('.left').onclick=()=>this.back();
+    this.el.querySelector('.right').onclick=()=>this.forward();
     this.el.querySelector('.flipBtn').onclick=()=>this.flip();
     this.el.querySelector('.resetBtn').onclick=()=>this.reset();
+
+    this.search=this.el.querySelector('input');
+    this.checks=this.el.querySelectorAll('input[type=checkbox]');
     this.checks.forEach(c=>c.onchange=()=>this.reloadSources());
     this.search.oninput=()=>this.reloadSources();
+
     this.drag();
   }
 
@@ -168,21 +188,13 @@ class ImageInstance{
     }
   }
 
-  show(url){
-    this.img.src=url;
-    this.reset();
-  }
+  show(url){this.img.src=url;this.reset();}
 
   forward(){
-    if(this.future.length){
-      this.history.push(this.future.shift());
-    } else if(this.img.src){
-      this.history.push(this.img.src);
-    }
+    if(this.img.src)this.history.push(this.img.src);
     if(this.history.length>this.maxHistory)this.history.shift();
-
-    const next=this.preloadQueue.shift()||this.randomSource();
-    if(next){this.show(next);}
+    const next=this.future.shift()||this.preloadQueue.shift()||this.randomSource();
+    if(next)this.show(next);
     this.future=[];
     this.preload();
   }
@@ -207,20 +219,16 @@ function applyLayout(){
   const n=instances.length;
   const on=document.getElementById('layoutToggle').checked;
 
-  if(!on||n===1){
-    instances.forEach(i=>c.appendChild(i.el));
-    return;
-  }
+  if(!on||n===1){instances.forEach(i=>c.appendChild(i.el));return;}
   if(n===2){
     instances[0].el.style.flex='0 0 66%';
     instances[1].el.style.flex='0 0 34%';
     c.append(instances[0].el,instances[1].el);
   }
   if(n===3){
-    const t=document.createElement('div');
-    t.style.flex='0 0 66%';t.append(instances[0].el);
-    const b=document.createElement('div');
-    b.className='row';b.style.flex='0 0 34%';
+    const t=document.createElement('div');t.style.flex='0 0 66%';
+    const b=document.createElement('div');b.className='row';b.style.flex='0 0 34%';
+    t.append(instances[0].el);
     b.append(instances[1].el,instances[2].el);
     c.append(t,b);
   }
@@ -230,10 +238,11 @@ document.getElementById('instanceCount').onchange=e=>createInstances(+e.target.v
 document.getElementById('layoutToggle').onchange=applyLayout;
 document.getElementById('hideUIBtn').onclick=()=>document.body.classList.toggle('hide-ui');
 
-document.onkeydown=e=>{
+document.addEventListener('keydown',e=>{
+  if(e.key.toLowerCase()==='u')document.body.classList.toggle('hide-ui');
   if(e.key==='a')instances.forEach(i=>i.back());
   if(e.key==='d')instances.forEach(i=>i.forward());
-};
+});
 
 createInstances(1);
 </script>
