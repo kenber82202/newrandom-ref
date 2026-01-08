@@ -7,45 +7,41 @@
 <style>
   body {
     margin:0;background:#000;color:#fff;font-family:sans-serif;
-    display:flex;flex-direction:column;align-items:center;
+    display:flex;flex-direction:column;align-items:center;height:100vh;overflow:hidden;
   }
   #topControls {
     position:fixed;top:5px;z-index:1000;display:flex;gap:10px;
     background:rgba(0,0,0,0.5);padding:5px 10px;border-radius:8px;
   }
   #instancesContainer {
-    margin-top:60px;width:100%;display:flex;flex-direction:column;gap:20px;
+    margin-top:50px;width:100%;height:100%;display:flex;flex-direction:column;gap:5px;
   }
   .instance {
-    position:relative;width:100%;height:33vh;
-    display:flex;flex-direction:column;align-items:center;justify-content:center;
+    position:relative;width:100%;flex:1;display:flex;flex-direction:column;
   }
-  .instance .image-container {
-    position:relative;width:100%;height:100%;overflow:hidden;
+  .image-wrapper {
+    flex:1;display:flex;align-items:center;justify-content:center;position:relative;
+    overflow:hidden;
   }
   .instance img {
     max-width:100%;max-height:100%;
     position:absolute;top:50%;left:50%;transform:translate(-50%,-50%) scale(1);
-    object-fit:contain;border:2px solid #fff;border-radius:8px;
-    transition:transform 0.1s ease-out;
+    object-fit:contain;border:2px solid #fff;border-radius:6px;transition:transform 0.1s ease-out;
+    user-select:none;
   }
-  .instance .toggles {
-    position:absolute;top:5px;left:50%;transform:translateX(-50%);
-    background:rgba(0,0,0,0.5);padding:5px;border-radius:6px;display:flex;gap:5px;
+  .toggles, .search-bar, .controls {
+    position:absolute;z-index:10;background:rgba(0,0,0,0.5);padding:3px 5px;border-radius:4px;
+    display:flex;gap:3px;flex-wrap:wrap;
   }
-  .instance .search-bar {
-    position:absolute;top:5px;left:5px;
-  }
-  .instance .controls {
-    position:absolute;bottom:5px;left:50%;transform:translateX(-50%);
-    display:flex;gap:10px;
-  }
-  .instance button {
-    background:rgba(30,30,30,0.8);color:#fff;border:none;border-radius:5px;padding:5px 10px;
-  }
+  .toggles {top:5px;left:50%;transform:translateX(-50%);}
+  .search-bar {top:5px;left:5px;}
+  .controls {bottom:5px;left:50%;transform:translateX(-50%);}
+  .toggles label, .controls button {cursor:pointer;font-size:0.8em;}
+  input[type=checkbox]{transform:scale(0.9);}
 </style>
 </head>
 <body>
+
 <div id="topControls">
   <label>Instances:
     <select id="instanceCount">
@@ -55,6 +51,7 @@
     </select>
   </label>
 </div>
+
 <div id="instancesContainer"></div>
 
 <script>
@@ -65,29 +62,29 @@ let instances=[];
 class ImageInstance{
   constructor(id,hotkeys){
     this.id=id;this.hotkeys=hotkeys;this.scale=1;this.isFlipped=false;
-    this.translate={x:0,y:0};this.historyStack=[];this.forwardStack=[];
-    this.sourceLists={};this.currentImage=null;
+    this.translate={x:0,y:0};this.sourceLists={};this.currentImage=null;
     this.createUI();
   }
 
   createUI(){
-    this.el=document.createElement('div');
-    this.el.className='instance';
+    this.el=document.createElement('div');this.el.className='instance';
     this.el.innerHTML=`
       <div class="search-bar"><input placeholder="Search (#tag)"></div>
       <div class="toggles">${["People","Places","Anime","Style"].map(c=>`
         <label><input type="checkbox" value="${c}">${c[0]}</label>`).join('')}</div>
-      <div class="image-container"><img draggable="false"></div>
+      <div class="image-wrapper"><img draggable="false"></div>
       <div class="controls">
         <button class="flipBtn">Flip (${this.hotkeys.flip.toUpperCase()})</button>
         <button class="resetBtn">Reset (${this.hotkeys.reset.toUpperCase()})</button>
       </div>`;
     document.getElementById('instancesContainer').appendChild(this.el);
+
     this.imgElement=this.el.querySelector('img');
     this.searchInput=this.el.querySelector('input');
     this.checkboxes=this.el.querySelectorAll('input[type=checkbox]');
     this.flipBtn=this.el.querySelector('.flipBtn');
     this.resetBtn=this.el.querySelector('.resetBtn');
+
     this.flipBtn.addEventListener('click',()=>this.flipImage());
     this.resetBtn.addEventListener('click',()=>this.resetImagePosition());
     this.checkboxes.forEach(cb=>cb.addEventListener('change',()=>this.loadSelectedSources()));
@@ -96,16 +93,12 @@ class ImageInstance{
   }
 
   addDragging(){
-    let isDragging=false,startPos={x:0,y:0};
-    this.imgElement.addEventListener('mousedown',e=>{
-      e.preventDefault();isDragging=true;startPos={x:e.clientX,y:e.clientY};
-    });
+    let isDragging=false,start={x:0,y:0};
+    this.imgElement.addEventListener('mousedown',e=>{e.preventDefault();isDragging=true;start={x:e.clientX,y:e.clientY}});
     document.addEventListener('mousemove',e=>{
       if(!isDragging)return;
-      this.translate.x+=e.clientX-startPos.x;
-      this.translate.y+=e.clientY-startPos.y;
-      startPos={x:e.clientX,y:e.clientY};
-      this.updateTransform();
+      this.translate.x+=e.clientX-start.x;this.translate.y+=e.clientY-start.y;
+      start={x:e.clientX,y:e.clientY};this.updateTransform();
     });
     document.addEventListener('mouseup',()=>{isDragging=false;});
   }
@@ -116,54 +109,36 @@ class ImageInstance{
       `translate(calc(-50% + ${this.translate.x}px),calc(-50% + ${this.translate.y}px)) scale(${flip*this.scale},${this.scale})`;
   }
 
-  resetImagePosition(){
-    this.scale=1;this.isFlipped=false;this.translate={x:0,y:0};this.updateTransform();
-  }
-
+  resetImagePosition(){this.scale=1;this.isFlipped=false;this.translate={x:0,y:0};this.updateTransform();}
   flipImage(){this.isFlipped=!this.isFlipped;this.updateTransform();}
 
-  async fetchLinksFor(subject){
-    try{
-      const res=await fetch(`${baseURL}${subject}.txt`);
-      const txt=await res.text();
-      return txt.trim().split('\n').filter(Boolean);
-    }catch{return [];}
-  }
+  async fetchLinksFor(subject){try{const r=await fetch(`${baseURL}${subject}.txt`);const t=await r.text();return t.trim().split('\n').filter(Boolean);}catch{return []}}
 
   async loadSelectedSources(){
-    const selected=[...this.checkboxes].filter(c=>c.checked).map(c=>c.value);
-    if(!selected.length)return;
-    const results=await Promise.all(selected.map(s=>this.fetchLinksFor(s)));
-    this.sourceLists=Object.fromEntries(selected.map((s,i)=>[s,results[i]]));
-    this.showRandomImage();
-  }
-
-  getRandomImageSource(){
-    const subjects=Object.keys(this.sourceLists);
-    if(!subjects.length)return null;
-    const chosen=subjects[Math.floor(Math.random()*subjects.length)];
-    const links=this.filterBySearch(this.sourceLists[chosen]);
-    if(!links.length)return null;
-    return {subject:chosen,url:links[Math.floor(Math.random()*links.length)]};
+    const sel=[...this.checkboxes].filter(c=>c.checked).map(c=>c.value);if(!sel.length)return;
+    const results=await Promise.all(sel.map(s=>this.fetchLinksFor(s)));
+    this.sourceLists=Object.fromEntries(sel.map((s,i)=>[s,results[i]]));this.showRandomImage();
   }
 
   filterBySearch(list){
-    const q=this.searchInput.value.trim().toLowerCase();
-    if(!q)return list;
+    const q=this.searchInput.value.trim().toLowerCase();if(!q)return list;
     const tags=q.split('#').map(s=>s.trim()).filter(Boolean);
     return list.filter(line=>tags.some(t=>line.toLowerCase().includes(t)));
   }
 
+  getRandomImageSource(){
+    const keys=Object.keys(this.sourceLists);if(!keys.length)return null;
+    const chosen=keys[Math.floor(Math.random()*keys.length)];
+    const links=this.filterBySearch(this.sourceLists[chosen]);if(!links.length)return null;
+    return {subject:chosen,url:links[Math.floor(Math.random()*links.length)]};
+  }
+
   showRandomImage(){
     const imgData=this.getRandomImageSource();if(!imgData)return;
-    const test=new Image();
-    test.onload=()=>{
-      if(test.naturalWidth>=200&&test.naturalHeight>=200){
-        this.imgElement.src=imgData.url;this.currentImage=imgData;this.resetImagePosition();
-      }else this.showRandomImage();
-    };
-    test.onerror=()=>this.showRandomImage();
-    test.src=imgData.url;
+    const test=new Image();test.onload=()=>{
+      if(test.naturalWidth>=200&&test.naturalHeight>=200){this.imgElement.src=imgData.url;this.currentImage=imgData;this.resetImagePosition();}
+      else this.showRandomImage();
+    };test.onerror=()=>this.showRandomImage();test.src=imgData.url;
   }
 
   navigateForward(){this.showRandomImage();}
@@ -171,14 +146,13 @@ class ImageInstance{
 }
 
 function createInstances(count){
-  document.getElementById('instancesContainer').innerHTML='';
-  instances=[];
+  document.getElementById('instancesContainer').innerHTML='';instances=[];
   for(let i=1;i<=count;i++){instances.push(new ImageInstance(i,hotkeys[i]));}
+  // Dynamic flex sizing
+  instances.forEach(inst=>inst.el.style.flex=`0 0 ${100/count}%`);
 }
 
-document.getElementById('instanceCount').addEventListener('change',e=>{
-  createInstances(+e.target.value);
-});
+document.getElementById('instanceCount').addEventListener('change',e=>createInstances(+e.target.value));
 
 document.addEventListener('keydown',e=>{
   const key=e.key.toLowerCase();
