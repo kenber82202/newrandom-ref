@@ -13,15 +13,17 @@
     position:fixed;top:5px;z-index:1000;display:flex;gap:10px;
     background:rgba(0,0,0,0.5);padding:5px 10px;border-radius:8px;
   }
+  body.hide-ui #topControls,
+  body.hide-ui .toggles,
+  body.hide-ui .search-bar,
+  body.hide-ui .controls {
+    display:none;
+  }
   #instancesContainer {
     margin-top:50px;width:100%;height:100%;
     display:flex;flex-direction:column;gap:5px;
   }
-  .row {
-    display:flex;
-    width:100%;
-    gap:5px;
-  }
+  .row {display:flex;width:100%;gap:5px;}
   .instance {
     position:relative;width:100%;flex:1;display:flex;flex-direction:column;
   }
@@ -43,8 +45,7 @@
   .toggles {top:5px;left:50%;transform:translateX(-50%);}
   .search-bar {top:5px;left:5px;}
   .controls {bottom:5px;left:50%;transform:translateX(-50%);}
-  .toggles label, .controls button {cursor:pointer;font-size:0.75em;white-space:nowrap;}
-  input[type=checkbox]{transform:scale(0.9);}
+  .toggles label, .controls button {cursor:pointer;font-size:0.75em;}
 </style>
 </head>
 <body>
@@ -57,9 +58,8 @@
       <option value="3">3</option>
     </select>
   </label>
-  <label>
-    <input type="checkbox" id="layoutToggle"> Custom Layout
-  </label>
+  <label><input type="checkbox" id="layoutToggle"> Custom Layout</label>
+  <button id="hideUIBtn">Hide UI</button>
 </div>
 
 <div id="instancesContainer"></div>
@@ -79,8 +79,16 @@ const categories=[
 
 class ImageInstance{
   constructor(id,hotkeys){
-    this.id=id;this.hotkeys=hotkeys;this.scale=1;this.isFlipped=false;
-    this.translate={x:0,y:0};this.sourceLists={};this.currentImage=null;
+    this.id=id;this.hotkeys=hotkeys;
+    this.scale=1;this.isFlipped=false;this.translate={x:0,y:0};
+    this.sourceLists={};
+
+    this.history=[];
+    this.future=[];
+    this.preloadQueue=[];
+    this.maxHistory=4;
+    this.maxPreload=8;
+
     this.createUI();
   }
 
@@ -94,125 +102,138 @@ class ImageInstance{
       </div>
       <div class="image-wrapper"><img draggable="false"></div>
       <div class="controls">
-        <button class="flipBtn">Flip (${this.hotkeys.flip.toUpperCase()})</button>
-        <button class="resetBtn">Reset (${this.hotkeys.reset.toUpperCase()})</button>
+        <button class="flipBtn">Flip</button>
+        <button class="resetBtn">Reset</button>
       </div>`;
-    this.imgElement=this.el.querySelector('img');
-    this.searchInput=this.el.querySelector('input');
-    this.checkboxes=this.el.querySelectorAll('input[type=checkbox]');
-    this.flipBtn=this.el.querySelector('.flipBtn');
-    this.resetBtn=this.el.querySelector('.resetBtn');
-
-    this.flipBtn.addEventListener('click',()=>this.flipImage());
-    this.resetBtn.addEventListener('click',()=>this.resetImagePosition());
-    this.checkboxes.forEach(cb=>cb.addEventListener('change',()=>this.loadSelectedSources()));
-    this.searchInput.addEventListener('input',()=>this.loadSelectedSources());
-    this.addDragging();
+    this.img=this.el.querySelector('img');
+    this.search=this.el.querySelector('input');
+    this.checks=this.el.querySelectorAll('input[type=checkbox]');
+    this.el.querySelector('.flipBtn').onclick=()=>this.flip();
+    this.el.querySelector('.resetBtn').onclick=()=>this.reset();
+    this.checks.forEach(c=>c.onchange=()=>this.reloadSources());
+    this.search.oninput=()=>this.reloadSources();
+    this.drag();
   }
 
-  addDragging(){
-    let isDragging=false,start={x:0,y:0};
-    this.imgElement.addEventListener('mousedown',e=>{e.preventDefault();isDragging=true;start={x:e.clientX,y:e.clientY}});
-    document.addEventListener('mousemove',e=>{
-      if(!isDragging)return;
-      this.translate.x+=e.clientX-start.x;this.translate.y+=e.clientY-start.y;
-      start={x:e.clientX,y:e.clientY};this.updateTransform();
-    });
-    document.addEventListener('mouseup',()=>{isDragging=false;});
+  drag(){
+    let d=false,s={x:0,y:0};
+    this.img.onmousedown=e=>{d=true;s={x:e.clientX,y:e.clientY}};
+    document.onmousemove=e=>{
+      if(!d)return;
+      this.translate.x+=e.clientX-s.x;
+      this.translate.y+=e.clientY-s.y;
+      s={x:e.clientX,y:e.clientY};
+      this.apply();
+    };
+    document.onmouseup=()=>d=false;
   }
 
-  updateTransform(){
-    const flip=this.isFlipped?-1:1;
-    this.imgElement.style.transform=
-      `translate(calc(-50% + ${this.translate.x}px),calc(-50% + ${this.translate.y}px)) scale(${flip*this.scale},${this.scale})`;
+  apply(){
+    const f=this.isFlipped?-1:1;
+    this.img.style.transform=
+      `translate(calc(-50% + ${this.translate.x}px),calc(-50% + ${this.translate.y}px)) scale(${f*this.scale},${this.scale})`;
   }
 
-  resetImagePosition(){this.scale=1;this.isFlipped=false;this.translate={x:0,y:0};this.updateTransform();}
-  flipImage(){this.isFlipped=!this.isFlipped;this.updateTransform();}
-  async fetchLinksFor(subject){try{const r=await fetch(`${baseURL}${subject}.txt`);const t=await r.text();return t.trim().split('\n').filter(Boolean);}catch{return []}}
-  async loadSelectedSources(){
-    const sel=[...this.checkboxes].filter(c=>c.checked).map(c=>c.value);
+  reset(){this.scale=1;this.isFlipped=false;this.translate={x:0,y:0};this.apply();}
+  flip(){this.isFlipped=!this.isFlipped;this.apply();}
+
+  async fetchLinks(s){
+    try{const r=await fetch(`${baseURL}${s}.txt`);
+      return (await r.text()).split('\n').filter(Boolean);}catch{return []}
+  }
+
+  async reloadSources(){
+    const sel=[...this.checks].filter(c=>c.checked).map(c=>c.value);
     if(!sel.length)return;
-    const results=await Promise.all(sel.map(s=>this.fetchLinksFor(s)));
-    this.sourceLists=Object.fromEntries(sel.map((s,i)=>[s,results[i]]));
-    this.showRandomImage();
+    const res=await Promise.all(sel.map(s=>this.fetchLinks(s)));
+    this.sourceLists=Object.fromEntries(sel.map((s,i)=>[s,res[i]]));
+    this.history=[];this.future=[];this.preloadQueue=[];
+    this.forward();
   }
-  filterBySearch(list){
-    const q=this.searchInput.value.trim().toLowerCase();if(!q)return list;
-    const tags=q.split('#').map(s=>s.trim()).filter(Boolean);
-    return list.filter(line=>tags.some(t=>line.toLowerCase().includes(t)));
+
+  randomSource(){
+    const k=Object.keys(this.sourceLists);
+    if(!k.length)return null;
+    const s=k[Math.floor(Math.random()*k.length)];
+    const l=this.sourceLists[s];
+    return l[Math.floor(Math.random()*l.length)];
   }
-  getRandomImageSource(){
-    const keys=Object.keys(this.sourceLists);if(!keys.length)return null;
-    const chosen=keys[Math.floor(Math.random()*keys.length)];
-    const links=this.filterBySearch(this.sourceLists[chosen]);if(!links.length)return null;
-    return {subject:chosen,url:links[Math.floor(Math.random()*links.length)]};
+
+  preload(){
+    while(this.preloadQueue.length<this.maxPreload){
+      const u=this.randomSource();
+      if(!u)break;
+      const img=new Image();img.src=u;
+      this.preloadQueue.push(u);
+    }
   }
-  showRandomImage(){
-    const imgData=this.getRandomImageSource();if(!imgData)return;
-    const test=new Image();test.onload=()=>{
-      if(test.naturalWidth>=200&&test.naturalHeight>=200){
-        this.imgElement.src=imgData.url;this.currentImage=imgData;this.resetImagePosition();
-      }else this.showRandomImage();
-    };test.onerror=()=>this.showRandomImage();test.src=imgData.url;
+
+  show(url){
+    this.img.src=url;
+    this.reset();
   }
-  navigateForward(){this.showRandomImage();}
-  navigateBack(){this.showRandomImage();}
+
+  forward(){
+    if(this.future.length){
+      this.history.push(this.future.shift());
+    } else if(this.img.src){
+      this.history.push(this.img.src);
+    }
+    if(this.history.length>this.maxHistory)this.history.shift();
+
+    const next=this.preloadQueue.shift()||this.randomSource();
+    if(next){this.show(next);}
+    this.future=[];
+    this.preload();
+  }
+
+  back(){
+    if(!this.history.length)return;
+    this.future.unshift(this.img.src);
+    this.show(this.history.pop());
+  }
 }
 
-function createInstances(count){
+function createInstances(n){
   const c=document.getElementById('instancesContainer');
-  c.innerHTML='';
-  instances=[];
-  for(let i=1;i<=count;i++)instances.push(new ImageInstance(i,hotkeys[i]));
+  c.innerHTML='';instances=[];
+  for(let i=1;i<=n;i++)instances.push(new ImageInstance(i,hotkeys[i]));
   applyLayout();
 }
 
 function applyLayout(){
   const c=document.getElementById('instancesContainer');
   c.innerHTML='';
-  const count=instances.length;
-  const custom=document.getElementById('layoutToggle').checked;
+  const n=instances.length;
+  const on=document.getElementById('layoutToggle').checked;
 
-  if(!custom || count===1){
-    instances.forEach(i=>{i.el.style.flex='1';c.appendChild(i.el)});
+  if(!on||n===1){
+    instances.forEach(i=>c.appendChild(i.el));
     return;
   }
-
-  if(count===2){
+  if(n===2){
     instances[0].el.style.flex='0 0 66%';
     instances[1].el.style.flex='0 0 34%';
     c.append(instances[0].el,instances[1].el);
   }
-
-  if(count===3){
-    const top=document.createElement('div');
-    top.style.flex='0 0 66%';
-    top.appendChild(instances[0].el);
-
-    const bottom=document.createElement('div');
-    bottom.className='row';
-    bottom.style.flex='0 0 34%';
-    instances[1].el.style.flex='1';
-    instances[2].el.style.flex='1';
-    bottom.append(instances[1].el,instances[2].el);
-
-    c.append(top,bottom);
+  if(n===3){
+    const t=document.createElement('div');
+    t.style.flex='0 0 66%';t.append(instances[0].el);
+    const b=document.createElement('div');
+    b.className='row';b.style.flex='0 0 34%';
+    b.append(instances[1].el,instances[2].el);
+    c.append(t,b);
   }
 }
 
-document.getElementById('instanceCount').addEventListener('change',e=>createInstances(+e.target.value));
-document.getElementById('layoutToggle').addEventListener('change',applyLayout);
+document.getElementById('instanceCount').onchange=e=>createInstances(+e.target.value);
+document.getElementById('layoutToggle').onchange=applyLayout;
+document.getElementById('hideUIBtn').onclick=()=>document.body.classList.toggle('hide-ui');
 
-document.addEventListener('keydown',e=>{
-  const key=e.key.toLowerCase();
-  if(key==='a')instances.forEach(i=>i.navigateBack());
-  if(key==='d')instances.forEach(i=>i.navigateForward());
-  instances.forEach(inst=>{
-    if(key===inst.hotkeys.flip)inst.flipImage();
-    if(key===inst.hotkeys.reset)inst.resetImagePosition();
-  });
-});
+document.onkeydown=e=>{
+  if(e.key==='a')instances.forEach(i=>i.back());
+  if(e.key==='d')instances.forEach(i=>i.forward());
+};
 
 createInstances(1);
 </script>
