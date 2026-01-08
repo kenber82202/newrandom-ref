@@ -3,37 +3,30 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width,initial-scale=1.0">
-<title>Multi Instance Image Navigator</title>
+<title>Ultra Fast Preload Image Navigator</title>
 <style>
-  body{margin:0;background:#000;color:#fff;font-family:sans-serif;display:flex;flex-direction:column;align-items:center;height:100vh;overflow:hidden;}
-  #topControls{position:fixed;top:5px;z-index:1000;display:flex;gap:10px;background:rgba(0,0,0,.5);padding:5px 10px;border-radius:8px;}
-  body.hide-ui #topControls,body.hide-ui .toggles,body.hide-ui .search-bar,body.hide-ui .controls{display:none;}
-  #instancesContainer{margin-top:50px;width:100%;height:100%;display:flex;flex-direction:column;gap:5px;}
-  .row{display:flex;width:100%;gap:5px;}
-  .instance{position:relative;width:100%;flex:1;display:flex;flex-direction:column;}
-  .image-wrapper{flex:1;display:flex;align-items:center;justify-content:center;position:relative;overflow:hidden;}
-  .instance img{max-width:100%;max-height:100%;position:absolute;top:50%;left:50%;transform:translate(-50%,-50%) scale(1);object-fit:contain;border:2px solid #fff;border-radius:6px;}
-  .nav-arrow{position:absolute;top:50%;transform:translateY(-50%);font-size:48px;color:#fff;opacity:.5;cursor:pointer;z-index:20;}
-  .nav-arrow.left{left:10px;}
-  .nav-arrow.right{right:10px;}
-  .toggles,.search-bar,.controls{position:absolute;z-index:10;background:rgba(0,0,0,.5);padding:3px 5px;border-radius:4px;display:flex;gap:4px;flex-wrap:wrap;}
-  .toggles{top:5px;left:50%;transform:translateX(-50%);}
-  .search-bar{top:5px;left:5px;}
-  .controls{bottom:5px;left:50%;transform:translateX(-50%);}
+body {margin:0;background:#000;color:#fff;font-family:sans-serif;display:flex;flex-direction:column;align-items:center;height:100vh;overflow:hidden;}
+#topControls {position:fixed;top:5px;z-index:1000;display:flex;gap:10px;background:rgba(0,0,0,0.5);padding:5px 10px;border-radius:8px;}
+body.hide-ui #topControls, body.hide-ui .toggles, body.hide-ui .search-bar, body.hide-ui .controls {display:none;}
+#instancesContainer {margin-top:50px;width:100%;height:100%;display:flex;flex-direction:column;gap:5px;}
+.row{display:flex;width:100%;gap:5px;}
+.instance{position:relative;width:100%;flex:1;display:flex;flex-direction:column;}
+.image-wrapper{flex:1;display:flex;align-items:center;justify-content:center;position:relative;overflow:hidden;}
+.instance img{max-width:100%;max-height:100%;position:absolute;top:50%;left:50%;transform:translate(-50%,-50%) scale(1);object-fit:contain;border:2px solid #fff;border-radius:6px;}
+.nav-arrow{position:absolute;top:50%;transform:translateY(-50%);font-size:48px;color:white;opacity:0.5;cursor:pointer;z-index:20;}
+.nav-arrow.left{left:10px;} .nav-arrow.right{right:10px;}
+.toggles,.search-bar,.controls{position:absolute;z-index:10;background:rgba(0,0,0,0.5);padding:3px 5px;border-radius:4px;display:flex;gap:4px;flex-wrap:wrap;}
+.toggles{top:5px;left:50%;transform:translateX(-50%);} .search-bar{top:5px;left:5px;} .controls{bottom:5px;left:50%;transform:translateX(-50%);}
 </style>
 </head>
 <body>
 
 <div id="topControls">
-  <label>Instances:
-    <select id="instanceCount">
-      <option value="1">1</option>
-      <option value="2">2</option>
-      <option value="3">3</option>
-    </select>
-  </label>
-  <label><input type="checkbox" id="layoutToggle"> Custom Layout</label>
-  <button id="hideUIBtn">Hide UI</button>
+<label>Instances:
+  <select id="instanceCount"><option value="1">1</option><option value="2">2</option><option value="3">3</option></select>
+</label>
+<label><input type="checkbox" id="layoutToggle"> Custom Layout</label>
+<button id="hideUIBtn">Hide UI</button>
 </div>
 
 <div id="instancesContainer"></div>
@@ -42,36 +35,25 @@
 const baseURL='https://f003.backblazeb2.com/file/links-ref/';
 const IMAGE_EXT=/\.(jpg|jpeg|png|webp|gif|avif|bmp)$/i;
 let instances=[];
-
 const categories=[
-  {v:"People",l:"P"},{v:"Figure",l:"F"},{v:"PeoplePlus",l:"+"},
-  {v:"Angles",l:"a"},{v:"Anime",l:"A"},{v:"Style",l:"S"},
-  {v:"Places",l:"P"},{v:"Emotion",l:"E"},{v:"Walk",l:"W"},
-  {v:"male-anatomy",l:"M"},{v:"Fujimoto",l:"F"},{v:"Gege",l:"G"},
+  {v:"People",l:"P"},{v:"Figure",l:"F"},{v:"PeoplePlus",l:"+"},{v:"Angles",l:"a"},{v:"Anime",l:"A"},{v:"Style",l:"S"},
+  {v:"Places",l:"P"},{v:"Emotion",l:"E"},{v:"Walk",l:"W"},{v:"male-anatomy",l:"M"},{v:"Fujimoto",l:"F"},{v:"Gege",l:"G"},
   {v:"Urasawa",l:"U+"},{v:"Asano",l:"A"},{v:"Isayama",l:"I"}
 ];
 
 class ImageInstance{
   constructor(){
-    this.history=[];
-    this.future=[];
-    this.preloadQueue=[];
-    this.maxHistory=4;
-    this.maxFuture=4;
-    this.maxPreload=4;
+    this.history=[]; this.future=[];
     this.sourceLists={};
-    this.used=new Set();
+    this.preloadImages=[]; // store small number of preloaded images
     this.createUI();
   }
 
   createUI(){
-    this.el=document.createElement('div');
-    this.el.className='instance';
+    this.el=document.createElement('div'); this.el.className='instance';
     this.el.innerHTML=`
       <div class="search-bar"><input placeholder="Search (#tag)"></div>
-      <div class="toggles">
-        ${categories.map(c=>`<label><input type="checkbox" value="${c.v}">${c.l}</label>`).join('')}
-      </div>
+      <div class="toggles">${categories.map(c=>`<label><input type="checkbox" value="${c.v}">${c.l}</label>`).join('')}</div>
       <div class="image-wrapper">
         <div class="nav-arrow left">&#10094;</div>
         <div class="nav-arrow right">&#10095;</div>
@@ -90,89 +72,93 @@ class ImageInstance{
 
   reset(){this.img.style.transform='translate(-50%,-50%) scale(1)';}
 
-  async fetchLinks(s){
+  async fetchLinks(subject){
     try{
-      const r=await fetch(`${baseURL}${s}.txt`);
+      const r=await fetch(`${baseURL}${subject}.txt`);
       return (await r.text()).split('\n').map(l=>l.trim()).filter(l=>IMAGE_EXT.test(l));
     }catch{return []}
   }
 
   async reloadSources(){
     const sel=[...this.checks].filter(c=>c.checked).map(c=>c.value);
-    if(!sel.length)return;
+    if(!sel.length) return;
     const res=await Promise.all(sel.map(s=>this.fetchLinks(s)));
     this.sourceLists=Object.fromEntries(sel.map((s,i)=>[s,res[i]]));
-    this.history.length=0;
-    this.future.length=0;
-    this.preloadQueue.length=0;
-    this.used.clear();
+    this.history=[]; this.future=[]; this.preloadImages=[];
     this.forward(true);
   }
 
-  randomImage(){
-    const keys=Object.keys(this.sourceLists);
-    if(!keys.length)return null;
-    const k=keys[Math.random()*keys.length|0];
-    const list=this.sourceLists[k];
-    return list[Math.random()*list.length|0];
-  }
-
-  preload(){
-    while(this.preloadQueue.length<this.maxPreload){
-      const u=this.randomImage();
-      if(!u||this.used.has(u))continue;
-      this.used.add(u);
+  async loadValidImage(url){
+    return new Promise(resolve=>{
       const img=new Image();
       img.decoding='async';
-      img.src=u;
-      this.preloadQueue.push(u);
+      img.src=url;
+      img.onload=()=>resolve(img.naturalWidth>=400 && img.naturalHeight>=400 ? url : null);
+      img.onerror=()=>resolve(null);
+    });
+  }
+
+  async randomImage(){
+    const keys=Object.keys(this.sourceLists); if(!keys.length) return null;
+    for(let i=0;i<20;i++){
+      const k=keys[Math.floor(Math.random()*keys.length)];
+      const list=this.sourceLists[k]; if(!list.length) continue;
+      const candidate=list[Math.floor(Math.random()*list.length)];
+      const valid=await this.loadValidImage(candidate);
+      if(valid) return valid;
+    }
+    return null;
+  }
+
+  async preloadNext(n=2){
+    for(let i=0;i<n;i++){
+      this.randomImage().then(url=>{
+        if(url) this.preloadImages.push(url);
+        if(this.preloadImages.length>n) this.preloadImages.shift();
+      });
     }
   }
 
-  show(url){
-    this.used.add(url);
-    this.img.src=url;
-    this.reset();
-  }
-
-  forward(force=false){
+  async forward(force=false){
     if(!force && this.future.length){
       const next=this.future.shift();
       this.history.push(this.img.src);
-      if(this.history.length>this.maxHistory)this.history.shift();
+      if(this.history.length>4) this.history.shift();
       this.show(next);
-      return;
+      this.preloadNext(); return;
     }
-    if(this.img.src){
-      this.history.push(this.img.src);
-      if(this.history.length>this.maxHistory)this.history.shift();
-    }
-    const next=this.preloadQueue.shift()||this.randomImage();
-    if(next)this.show(next);
-    this.future.length=0;
-    this.preload();
+
+    if(this.img.src){this.history.push(this.img.src); if(this.history.length>4)this.history.shift();}
+    let next=null;
+    if(this.preloadImages.length) next=this.preloadImages.shift();
+    else next=await this.randomImage();
+    if(next) this.show(next);
+    this.future=[];
+    this.preloadNext();
   }
 
   back(){
-    if(!this.history.length)return;
+    if(!this.history.length) return;
     this.future.unshift(this.img.src);
-    if(this.future.length>this.maxFuture)this.future.pop();
-    this.show(this.history.pop());
+    if(this.future.length>4) this.future.pop();
+    const prev=this.history.pop();
+    this.show(prev);
   }
+
+  show(url){this.img.src=url; this.reset();}
 }
 
 function createInstances(n){
-  const c=document.getElementById('instancesContainer');
-  c.innerHTML='';instances=[];
-  for(let i=0;i<n;i++){const inst=new ImageInstance();instances.push(inst);c.appendChild(inst.el);}
+  const c=document.getElementById('instancesContainer'); c.innerHTML=''; instances=[];
+  for(let i=0;i<n;i++){const inst=new ImageInstance(); instances.push(inst); c.appendChild(inst.el);}
 }
 
 document.getElementById('instanceCount').onchange=e=>createInstances(+e.target.value);
 document.getElementById('hideUIBtn').onclick=()=>document.body.classList.toggle('hide-ui');
 document.addEventListener('keydown',e=>{
-  if(e.key.toLowerCase()==='u')document.body.classList.toggle('hide-ui');
-  if(e.key==='a')instances.forEach(i=>i.back());
-  if(e.key==='d')instances.forEach(i=>i.forward());
+  if(e.key.toLowerCase()==='u') document.body.classList.toggle('hide-ui');
+  if(e.key==='a') instances.forEach(i=>i.back());
+  if(e.key==='d') instances.forEach(i=>i.forward());
 });
 
 createInstances(1);
