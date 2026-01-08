@@ -14,7 +14,8 @@
     background:rgba(0,0,0,0.5);padding:5px 10px;border-radius:8px;
   }
   #instancesContainer {
-    margin-top:50px;width:100%;height:100%;display:flex;flex-direction:column;gap:5px;
+    margin-top:50px;width:100%;height:100%;
+    display:flex;flex-direction:column;gap:5px;
   }
   .instance {
     position:relative;width:100%;flex:1;display:flex;flex-direction:column;
@@ -25,18 +26,19 @@
   }
   .instance img {
     max-width:100%;max-height:100%;
-    position:absolute;top:50%;left:50%;transform:translate(-50%,-50%) scale(1);
-    object-fit:contain;border:2px solid #fff;border-radius:6px;transition:transform 0.1s ease-out;
-    user-select:none;
+    position:absolute;top:50%;left:50%;
+    transform:translate(-50%,-50%) scale(1);
+    object-fit:contain;border:2px solid #fff;border-radius:6px;
+    transition:transform 0.1s ease-out;user-select:none;
   }
   .toggles, .search-bar, .controls {
-    position:absolute;z-index:10;background:rgba(0,0,0,0.5);padding:3px 5px;border-radius:4px;
-    display:flex;gap:3px;flex-wrap:wrap;
+    position:absolute;z-index:10;background:rgba(0,0,0,0.5);
+    padding:3px 5px;border-radius:4px;display:flex;gap:4px;flex-wrap:wrap;
   }
   .toggles {top:5px;left:50%;transform:translateX(-50%);}
   .search-bar {top:5px;left:5px;}
   .controls {bottom:5px;left:50%;transform:translateX(-50%);}
-  .toggles label, .controls button {cursor:pointer;font-size:0.8em;}
+  .toggles label, .controls button {cursor:pointer;font-size:0.75em;white-space:nowrap;}
   input[type=checkbox]{transform:scale(0.9);}
 </style>
 </head>
@@ -59,6 +61,14 @@ const baseURL='https://f003.backblazeb2.com/file/links-ref/';
 const hotkeys={1:{flip:'f',reset:'r'},2:{flip:'g',reset:'t'},3:{flip:'h',reset:'y'}};
 let instances=[];
 
+const categories=[
+  {v:"People",l:"P"},{v:"Figure",l:"F"},{v:"PeoplePlus",l:"+"},
+  {v:"Angles",l:"a"},{v:"Anime",l:"A"},{v:"Style",l:"S"},
+  {v:"Places",l:"P"},{v:"Emotion",l:"E"},{v:"Walk",l:"W"},
+  {v:"male-anatomy",l:"M"},{v:"Fujimoto",l:"F"},{v:"Gege",l:"G"},
+  {v:"Urasawa",l:"U+"},{v:"Asano",l:"A"},{v:"Isayama",l:"I"}
+];
+
 class ImageInstance{
   constructor(id,hotkeys){
     this.id=id;this.hotkeys=hotkeys;this.scale=1;this.isFlipped=false;
@@ -67,11 +77,13 @@ class ImageInstance{
   }
 
   createUI(){
-    this.el=document.createElement('div');this.el.className='instance';
+    this.el=document.createElement('div');
+    this.el.className='instance';
     this.el.innerHTML=`
       <div class="search-bar"><input placeholder="Search (#tag)"></div>
-      <div class="toggles">${["People","Places","Anime","Style"].map(c=>`
-        <label><input type="checkbox" value="${c}">${c[0]}</label>`).join('')}</div>
+      <div class="toggles">
+        ${categories.map(c=>`<label><input type="checkbox" value="${c.v}">${c.l}</label>`).join('')}
+      </div>
       <div class="image-wrapper"><img draggable="false"></div>
       <div class="controls">
         <button class="flipBtn">Flip (${this.hotkeys.flip.toUpperCase()})</button>
@@ -115,9 +127,11 @@ class ImageInstance{
   async fetchLinksFor(subject){try{const r=await fetch(`${baseURL}${subject}.txt`);const t=await r.text();return t.trim().split('\n').filter(Boolean);}catch{return []}}
 
   async loadSelectedSources(){
-    const sel=[...this.checkboxes].filter(c=>c.checked).map(c=>c.value);if(!sel.length)return;
+    const sel=[...this.checkboxes].filter(c=>c.checked).map(c=>c.value);
+    if(!sel.length)return;
     const results=await Promise.all(sel.map(s=>this.fetchLinksFor(s)));
-    this.sourceLists=Object.fromEntries(sel.map((s,i)=>[s,results[i]]));this.showRandomImage();
+    this.sourceLists=Object.fromEntries(sel.map((s,i)=>[s,results[i]]));
+    this.showRandomImage();
   }
 
   filterBySearch(list){
@@ -136,8 +150,9 @@ class ImageInstance{
   showRandomImage(){
     const imgData=this.getRandomImageSource();if(!imgData)return;
     const test=new Image();test.onload=()=>{
-      if(test.naturalWidth>=200&&test.naturalHeight>=200){this.imgElement.src=imgData.url;this.currentImage=imgData;this.resetImagePosition();}
-      else this.showRandomImage();
+      if(test.naturalWidth>=200&&test.naturalHeight>=200){
+        this.imgElement.src=imgData.url;this.currentImage=imgData;this.resetImagePosition();
+      }else this.showRandomImage();
     };test.onerror=()=>this.showRandomImage();test.src=imgData.url;
   }
 
@@ -146,9 +161,9 @@ class ImageInstance{
 }
 
 function createInstances(count){
-  document.getElementById('instancesContainer').innerHTML='';instances=[];
+  document.getElementById('instancesContainer').innerHTML='';
+  instances=[];
   for(let i=1;i<=count;i++){instances.push(new ImageInstance(i,hotkeys[i]));}
-  // Dynamic flex sizing
   instances.forEach(inst=>inst.el.style.flex=`0 0 ${100/count}%`);
 }
 
