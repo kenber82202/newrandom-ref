@@ -5,19 +5,18 @@
 <meta name="viewport" content="width=device-width,initial-scale=1.0">
 <title>Multi Instance Image Navigator</title>
 <style>
-/* UI untouched */
   body{margin:0;background:#000;color:#fff;font-family:sans-serif;display:flex;flex-direction:column;align-items:center;height:100vh;overflow:hidden;}
-  #topControls{position:fixed;top:5px;z-index:1000;display:flex;gap:10px;background:rgba(0,0,0,0.5);padding:5px 10px;border-radius:8px;}
+  #topControls{position:fixed;top:5px;z-index:1000;display:flex;gap:10px;background:rgba(0,0,0,.5);padding:5px 10px;border-radius:8px;}
   body.hide-ui #topControls,body.hide-ui .toggles,body.hide-ui .search-bar,body.hide-ui .controls{display:none;}
   #instancesContainer{margin-top:50px;width:100%;height:100%;display:flex;flex-direction:column;gap:5px;}
   .row{display:flex;width:100%;gap:5px;}
   .instance{position:relative;width:100%;flex:1;display:flex;flex-direction:column;}
   .image-wrapper{flex:1;display:flex;align-items:center;justify-content:center;position:relative;overflow:hidden;}
   .instance img{max-width:100%;max-height:100%;position:absolute;top:50%;left:50%;transform:translate(-50%,-50%) scale(1);object-fit:contain;border:2px solid #fff;border-radius:6px;}
-  .nav-arrow{position:absolute;top:50%;transform:translateY(-50%);font-size:48px;color:white;opacity:0.5;cursor:pointer;z-index:20;}
+  .nav-arrow{position:absolute;top:50%;transform:translateY(-50%);font-size:48px;color:#fff;opacity:.5;cursor:pointer;z-index:20;}
   .nav-arrow.left{left:10px;}
   .nav-arrow.right{right:10px;}
-  .toggles,.search-bar,.controls{position:absolute;z-index:10;background:rgba(0,0,0,0.5);padding:3px 5px;border-radius:4px;display:flex;gap:4px;flex-wrap:wrap;}
+  .toggles,.search-bar,.controls{position:absolute;z-index:10;background:rgba(0,0,0,.5);padding:3px 5px;border-radius:4px;display:flex;gap:4px;flex-wrap:wrap;}
   .toggles{top:5px;left:50%;transform:translateX(-50%);}
   .search-bar{top:5px;left:5px;}
   .controls{bottom:5px;left:50%;transform:translateX(-50%);}
@@ -42,7 +41,6 @@
 <script>
 const baseURL='https://f003.backblazeb2.com/file/links-ref/';
 const IMAGE_EXT=/\.(jpg|jpeg|png|webp|gif|avif|bmp)$/i;
-const BITMAP_CACHE=new Map(); // url -> ImageBitmap
 let instances=[];
 
 const categories=[
@@ -62,6 +60,7 @@ class ImageInstance{
     this.maxFuture=4;
     this.maxPreload=4;
     this.sourceLists={};
+    this.used=new Set();
     this.createUI();
   }
 
@@ -70,7 +69,9 @@ class ImageInstance{
     this.el.className='instance';
     this.el.innerHTML=`
       <div class="search-bar"><input placeholder="Search (#tag)"></div>
-      <div class="toggles">${categories.map(c=>`<label><input type="checkbox" value="${c.v}">${c.l}</label>`).join('')}</div>
+      <div class="toggles">
+        ${categories.map(c=>`<label><input type="checkbox" value="${c.v}">${c.l}</label>`).join('')}
+      </div>
       <div class="image-wrapper">
         <div class="nav-arrow left">&#10094;</div>
         <div class="nav-arrow right">&#10095;</div>
@@ -101,55 +102,45 @@ class ImageInstance{
     if(!sel.length)return;
     const res=await Promise.all(sel.map(s=>this.fetchLinks(s)));
     this.sourceLists=Object.fromEntries(sel.map((s,i)=>[s,res[i]]));
-    this.history=[];this.future=[];this.preloadQueue=[];
+    this.history.length=0;
+    this.future.length=0;
+    this.preloadQueue.length=0;
+    this.used.clear();
     this.forward(true);
   }
 
   randomImage(){
     const keys=Object.keys(this.sourceLists);
     if(!keys.length)return null;
-    const k=keys[Math.floor(Math.random()*keys.length)];
+    const k=keys[Math.random()*keys.length|0];
     const list=this.sourceLists[k];
-    return list[Math.floor(Math.random()*list.length)];
-  }
-
-  async decode(url){
-    if(BITMAP_CACHE.has(url))return;
-    const res=await fetch(url);
-    const blob=await res.blob();
-    const bmp=await createImageBitmap(blob);
-    BITMAP_CACHE.set(url,bmp);
+    return list[Math.random()*list.length|0];
   }
 
   preload(){
-    const used=new Set([...this.history,this.img.src,...this.future,...this.preloadQueue]);
     while(this.preloadQueue.length<this.maxPreload){
       const u=this.randomImage();
-      if(!u||used.has(u))break;
-      used.add(u);
-      this.decode(u);
+      if(!u||this.used.has(u))continue;
+      this.used.add(u);
+      const img=new Image();
+      img.decoding='async';
+      img.src=u;
       this.preloadQueue.push(u);
     }
   }
 
   show(url){
-    if(BITMAP_CACHE.has(url)){
-      const bmp=BITMAP_CACHE.get(url);
-      const c=document.createElement('canvas');
-      c.width=bmp.width;c.height=bmp.height;
-      c.getContext('2d').drawImage(bmp,0,0);
-      this.img.src=c.toDataURL();
-    }else{
-      this.img.src=url;
-    }
+    this.used.add(url);
+    this.img.src=url;
     this.reset();
   }
 
   forward(force=false){
     if(!force && this.future.length){
+      const next=this.future.shift();
       this.history.push(this.img.src);
       if(this.history.length>this.maxHistory)this.history.shift();
-      this.show(this.future.shift());
+      this.show(next);
       return;
     }
     if(this.img.src){
@@ -158,7 +149,7 @@ class ImageInstance{
     }
     const next=this.preloadQueue.shift()||this.randomImage();
     if(next)this.show(next);
-    this.future=[];
+    this.future.length=0;
     this.preload();
   }
 
