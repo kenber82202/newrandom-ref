@@ -110,7 +110,7 @@ class ImageInstance{
     return null;
   }
 
-  async preloadNext(n=2){
+  async preloadNext(n=5){
     for(let i=0;i<n;i++){
       this.randomImage().then(url=>{
         if(url) this.preloadImages.push(url);
