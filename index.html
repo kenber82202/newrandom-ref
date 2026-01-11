@@ -45,18 +45,14 @@ body.hide-ui .controls{
   gap:5px;
 }
 
-.row{display:flex;width:100%;gap:5px;}
-
 .instance{
   position:relative;
-  width:100%;
   flex:1;
-  display:flex;
-  flex-direction:column;
 }
 
 .image-wrapper{
-  flex:1;
+  width:100%;
+  height:100%;
   position:relative;
   overflow:hidden;
 }
@@ -112,7 +108,6 @@ body.hide-ui .controls{
       <option value="3">3</option>
     </select>
   </label>
-  <label><input type="checkbox" id="layoutToggle"> Custom Layout</label>
   <button id="hideUIBtn">Hide UI</button>
 </div>
 
@@ -120,188 +115,146 @@ body.hide-ui .controls{
 
 <script>
 const baseURL = 'https://f003.backblazeb2.com/file/linksref2/';
+const CORS_PROXY = 'https://api.allorigins.win/raw?url=';
 const IMAGE_EXT = /\.(jpg|jpeg|png|webp|gif|avif|bmp)$/i;
 
 let instances = [];
 
 const categories = [
-  {v:"People",l:"P"},{v:"pplus",l:"p"},{v:"Anime",l:"A"},{v:"angle",l:"a"},
-  {v:"Figure",l:"F"},{v:"Style",l:"S"},{v:"XMaleAnatomy",l:"X"},
-  {v:"Emotions",l:"E"},{v:"Background",l:"B"},{v:"Walk",l:"W"},
-  {v:"screencap",l:"s"},{v:"Manga",l:"M"},
-  {v:"moeManga",l:"m"},{v:"TestPanel",l:"T"}
+  {v:"People",l:"P"},{v:"Anime",l:"A"},
+  {v:"Background",l:"B"},{v:"Walk",l:"W"}
 ];
 
 class ImageInstance{
   constructor(){
-    this.history = [];
-    this.future = [];
-    this.sourceLists = {};
-    this.preloadImages = [];
-    this.gen = 0;
+    this.history=[];
+    this.future=[];
+    this.sourceLists={};
+    this.preloadImages=[];
+    this.gen=0;
     this.createUI();
   }
 
   createUI(){
-    this.el = document.createElement('div');
-    this.el.className = 'instance';
+    this.el=document.createElement('div');
+    this.el.className='instance';
 
-    this.el.innerHTML = `
-      <div class="search-bar"><input placeholder="Search (#tag)"></div>
+    this.el.innerHTML=`
       <div class="toggles">
         ${categories.map(c=>`<label><input type="checkbox" value="${c.v}">${c.l}</label>`).join('')}
       </div>
       <div class="image-wrapper">
         <div class="nav-arrow left">&#10094;</div>
         <div class="nav-arrow right">&#10095;</div>
-        <img draggable="false">
+        <img>
       </div>
-      <div class="controls"><button class="resetBtn">Reset</button></div>
     `;
 
-    this.img = this.el.querySelector('img');
-
-    this.el.querySelector('.left').onclick = () => this.back();
-    this.el.querySelector('.right').onclick = () => this.forward();
-    this.el.querySelector('.resetBtn').onclick = () => this.reset();
-
-    this.search = this.el.querySelector('input');
-    this.checks = this.el.querySelectorAll('input[type=checkbox]');
-    this.checks.forEach(c => c.onchange = () => this.reloadSources());
-    this.search.oninput = () => this.reloadSources();
+    this.img=this.el.querySelector('img');
+    this.el.querySelector('.left').onclick=()=>this.back();
+    this.el.querySelector('.right').onclick=()=>this.forward();
+    this.checks=this.el.querySelectorAll('input');
+    this.checks.forEach(c=>c.onchange=()=>this.reloadSources());
   }
-
-  reset(){}
 
   async fetchLinks(subject){
     try{
-      const r = await fetch(`${baseURL}${subject}.txt`);
-      return (await r.text())
-        .split('\n')
-        .map(l=>l.trim())
-        .filter(l=>IMAGE_EXT.test(l));
-    }catch{
+      const url = CORS_PROXY + encodeURIComponent(`${baseURL}${subject}.txt`);
+      const r = await fetch(url);
+      const text = await r.text();
+      return text.split('\n').map(l=>l.trim()).filter(l=>IMAGE_EXT.test(l));
+    }catch(e){
+      console.error("Fetch failed:", subject, e);
       return [];
     }
   }
 
   async reloadSources(){
     this.gen++;
-    const myGen = this.gen;
+    const myGen=this.gen;
 
-    const sel = [...this.checks].filter(c=>c.checked).map(c=>c.value);
+    const sel=[...this.checks].filter(c=>c.checked).map(c=>c.value);
     if(!sel.length) return;
 
-    const res = await Promise.all(sel.map(s=>this.fetchLinks(s)));
-    if(this.gen !== myGen) return;
+    const res=await Promise.all(sel.map(s=>this.fetchLinks(s)));
+    if(this.gen!==myGen) return;
 
-    this.sourceLists = Object.fromEntries(sel.map((s,i)=>[s,res[i]]));
-    this.history = [];
-    this.future = [];
-    this.preloadImages = [];
-
+    this.sourceLists=Object.fromEntries(sel.map((s,i)=>[s,res[i]]));
+    this.history=[]; this.future=[]; this.preloadImages=[];
     this.forward(true);
   }
 
-  async loadValidImage(url){
-    return new Promise(resolve=>{
-      const img = new Image();
-      img.decoding = 'async';
-      img.loading = 'eager';
-      img.src = url;
-      img.onload = () => resolve(
-        img.naturalWidth >= 150 && img.naturalHeight >= 150 ? url : null
-      );
-      img.onerror = () => resolve(null);
-    });
-  }
-
   async randomImage(){
-    const keys = Object.keys(this.sourceLists);
+    const keys=Object.keys(this.sourceLists);
     if(!keys.length) return null;
 
-    for(let i=0;i<20;i++){
-      const k = keys[Math.floor(Math.random()*keys.length)];
-      const list = this.sourceLists[k];
+    for(let i=0;i<30;i++){
+      const k=keys[Math.floor(Math.random()*keys.length)];
+      const list=this.sourceLists[k];
       if(!list.length) continue;
-
-      const candidate = list[Math.floor(Math.random()*list.length)];
-      if(candidate === this.img.src) continue;
-
-      const valid = await this.loadValidImage(candidate);
-      if(valid) return valid;
+      return list[Math.floor(Math.random()*list.length)];
     }
     return null;
   }
 
-  preloadNext(max=5){
-    const myGen = this.gen;
-    while(this.preloadImages.length < max){
+  preloadNext(max=4){
+    const myGen=this.gen;
+    while(this.preloadImages.length<max){
       this.randomImage().then(url=>{
-        if(this.gen !== myGen) return;
-        if(url && !this.preloadImages.includes(url)){
-          this.preloadImages.push(url);
-        }
+        if(this.gen!==myGen) return;
+        if(url) this.preloadImages.push(url);
       });
     }
   }
 
   async forward(force=false){
     if(!force && this.future.length){
-      const next = this.future.shift();
+      const n=this.future.shift();
       this.history.push(this.img.src);
-      if(this.history.length > 4) this.history.shift();
-      this.show(next);
-      this.preloadNext();
+      if(this.history.length>4) this.history.shift();
+      this.show(n);
       return;
     }
 
     if(this.img.src){
       this.history.push(this.img.src);
-      if(this.history.length > 4) this.history.shift();
+      if(this.history.length>4) this.history.shift();
     }
 
-    let next = this.preloadImages.length
+    const next=this.preloadImages.length
       ? this.preloadImages.shift()
       : await this.randomImage();
 
     if(next) this.show(next);
-    this.future = [];
+    this.future=[];
     this.preloadNext();
   }
 
   back(){
     if(!this.history.length) return;
     this.future.unshift(this.img.src);
-    if(this.future.length > 4) this.future.pop();
+    if(this.future.length>4) this.future.pop();
     this.show(this.history.pop());
   }
 
   show(url){
-    this.img.src = url;
+    this.img.src=url;
   }
 }
 
 function createInstances(n){
-  const c = document.getElementById('instancesContainer');
-  c.innerHTML = '';
-  instances = [];
-
+  const c=document.getElementById('instancesContainer');
+  c.innerHTML='';
+  instances=[];
   for(let i=0;i<n;i++){
-    const inst = new ImageInstance();
+    const inst=new ImageInstance();
     instances.push(inst);
     c.appendChild(inst.el);
   }
 }
 
-document.getElementById('instanceCount').onchange = e => createInstances(+e.target.value);
-document.getElementById('hideUIBtn').onclick = () => document.body.classList.toggle('hide-ui');
-
-document.addEventListener('keydown', e=>{
-  if(e.key.toLowerCase() === 'u') document.body.classList.toggle('hide-ui');
-  if(e.key === 'a') instances.forEach(i=>i.back());
-  if(e.key === 'd') instances.forEach(i=>i.forward());
-});
+document.getElementById('instanceCount').onchange=e=>createInstances(+e.target.value);
+document.getElementById('hideUIBtn').onclick=()=>document.body.classList.toggle('hide-ui');
 
 createInstances(1);
 </script>
