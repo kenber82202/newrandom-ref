@@ -5,12 +5,23 @@
 <meta name="viewport" content="width=device-width,initial-scale=1.0">
 <title>Ultra Fast Preload Image Navigator</title>
 <style>
+*{box-sizing:border-box;}
+
 body {margin:0;background:#000;color:#fff;font-family:sans-serif;display:flex;flex-direction:column;align-items:center;height:100vh;overflow:hidden;}
 #topControls {position:fixed;top:5px;z-index:1000;display:flex;gap:10px;background:rgba(0,0,0,0.5);padding:5px 10px;border-radius:8px;}
 body.hide-ui #topControls, body.hide-ui .toggles, body.hide-ui .search-bar, body.hide-ui .controls {display:none;}
 #instancesContainer {margin-top:50px;width:100%;height:100%;display:flex;flex-direction:column;gap:5px;}
 .row{display:flex;width:100%;gap:5px;}
-.instance{position:relative;width:100%;flex:1;display:flex;flex-direction:column;min-height:0;}
+
+.instance{
+  position:relative;
+  width:100%;
+  flex:1;
+  display:flex;
+  flex-direction:column;
+  min-height:0;
+}
+
 .image-wrapper{
   flex:1;
   position:relative;
@@ -18,15 +29,16 @@ body.hide-ui #topControls, body.hide-ui .toggles, body.hide-ui .search-bar, body
   width:100%;
   height:100%;
 }
+
 .instance img{
-  position:absolute;
-  inset:0;
   width:100%;
   height:100%;
-  object-fit:cover;
+  object-fit:contain;
+  display:block;
   border:2px solid #fff;
   border-radius:6px;
 }
+
 .nav-arrow{position:absolute;top:50%;transform:translateY(-50%);font-size:48px;color:white;opacity:0.5;cursor:pointer;z-index:20;}
 .nav-arrow.left{left:10px;} .nav-arrow.right{right:10px;}
 .toggles,.search-bar,.controls{position:absolute;z-index:10;background:rgba(0,0,0,0.5);padding:3px 5px;border-radius:4px;display:flex;gap:4px;flex-wrap:wrap;}
@@ -77,14 +89,12 @@ class ImageInstance{
     this.img=this.el.querySelector('img');
     this.el.querySelector('.left').onclick=()=>this.back();
     this.el.querySelector('.right').onclick=()=>this.forward();
-    this.el.querySelector('.resetBtn').onclick=()=>this.reset();
+    this.el.querySelector('.resetBtn').onclick=()=>{};
     this.search=this.el.querySelector('input');
     this.checks=this.el.querySelectorAll('input[type=checkbox]');
     this.checks.forEach(c=>c.onchange=()=>this.reloadSources());
     this.search.oninput=()=>this.reloadSources();
   }
-
-  reset(){}
 
   async fetchLinks(subject){
     try{
