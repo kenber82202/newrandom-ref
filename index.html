@@ -93,7 +93,7 @@ class ImageInstance{
       const img=new Image();
       img.decoding='async';
       img.src=url;
-      img.onload=()=>resolve(img.naturalWidth>=400 && img.naturalHeight>=400 ? url : null);
+      img.onload=()=>resolve(img.naturalWidth>=150 && img.naturalHeight>=150 ? url : null);
       img.onerror=()=>resolve(null);
     });
   }
