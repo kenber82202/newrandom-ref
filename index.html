@@ -7,27 +7,47 @@
 
 <style>
 body{
-  margin:0;background:#000;color:#fff;font-family:sans-serif;
-  display:flex;flex-direction:column;align-items:center;
-  height:100vh;overflow:hidden;
+  margin:0;
+  background:#000;
+  color:#fff;
+  font-family:sans-serif;
+  display:flex;
+  flex-direction:column;
+  align-items:center;
+  height:100vh;
+  overflow:hidden;
 }
 
+/* TOP UI */
 #topControls{
-  position:fixed;top:5px;z-index:1000;
-  display:flex;gap:10px;
-  background:rgba(0,0,0,0.5);
-  padding:5px 10px;border-radius:8px;
+  position:fixed;
+  top:5px;
+  z-index:1000;
+  display:flex;
+  gap:10px;
+  background:rgba(0,0,0,.5);
+  padding:5px 10px;
+  border-radius:8px;
 }
 
 body.hide-ui #topControls,
 body.hide-ui .toggles,
 body.hide-ui .search-bar,
-body.hide-ui .controls{display:none;}
-
-#instancesContainer{
-  margin-top:50px;width:100%;height:100%;
-  display:flex;flex-direction:column;gap:5px;
+body.hide-ui .controls{
+  display:none;
 }
+
+/* INSTANCES */
+#instancesContainer{
+  margin-top:50px;
+  width:100%;
+  height:100%;
+  display:flex;
+  flex-direction:column;
+  gap:5px;
+}
+
+.row{display:flex;width:100%;gap:5px;}
 
 .instance{
   position:relative;
@@ -35,38 +55,53 @@ body.hide-ui .controls{display:none;}
   flex:1;
   display:flex;
   flex-direction:column;
+  overflow:hidden;
 }
 
+/* IMAGE AREA */
 .image-wrapper{
   flex:1;
   position:relative;
-  overflow:hidden; /* 🔒 keeps image inside its instance */
+  overflow:hidden;
+  background:#000;
 }
 
+/* 🔥 CORRECT IMAGE FITTING 🔥 */
 .instance img{
   width:100%;
   height:100%;
-  object-fit:contain;     /* ✅ dynamic fit */
+  object-fit:cover;        /* auto zoom to fit */
   object-position:center;
+  display:block;
   border:2px solid #fff;
   border-radius:6px;
 }
 
+/* NAV */
 .nav-arrow{
-  position:absolute;top:50%;
+  position:absolute;
+  top:50%;
   transform:translateY(-50%);
-  font-size:48px;color:white;
-  opacity:0.5;cursor:pointer;
-  z-index:20;user-select:none;
+  font-size:48px;
+  color:white;
+  opacity:.5;
+  cursor:pointer;
+  z-index:20;
+  user-select:none;
 }
 .nav-arrow.left{left:10px;}
 .nav-arrow.right{right:10px;}
 
+/* UI OVERLAYS */
 .toggles,.search-bar,.controls{
-  position:absolute;z-index:10;
-  background:rgba(0,0,0,0.5);
-  padding:3px 5px;border-radius:4px;
-  display:flex;gap:4px;flex-wrap:wrap;
+  position:absolute;
+  z-index:10;
+  background:rgba(0,0,0,.5);
+  padding:3px 5px;
+  border-radius:4px;
+  display:flex;
+  gap:4px;
+  flex-wrap:wrap;
 }
 .toggles{top:5px;left:50%;transform:translateX(-50%);}
 .search-bar{top:5px;left:5px;}
@@ -93,31 +128,28 @@ body.hide-ui .controls{display:none;}
 <script>
 const baseURL='https://f003.backblazeb2.com/file/linksref2/';
 const IMAGE_EXT=/\.(jpg|jpeg|png|webp|gif|avif|bmp)$/i;
+let instances=[];
 
 const categories=[
-  {v:"People",l:"P"},{v:"pplus",l:"p"},{v:"Anime",l:"A"},
-  {v:"angle",l:"a"},{v:"Figure",l:"F"},{v:"Style",l:"S"},
-  {v:"XMaleAnatomy",l:"X"},{v:"Emotions",l:"E"},
-  {v:"Background",l:"B"},{v:"Walk",l:"W"},
+  {v:"People",l:"P"},{v:"pplus",l:"p"},{v:"Anime",l:"A"},{v:"angle",l:"a"},
+  {v:"Figure",l:"F"},{v:"Style",l:"S"},{v:"XMaleAnatomy",l:"X"},
+  {v:"Emotions",l:"E"},{v:"Background",l:"B"},{v:"Walk",l:"W"},
   {v:"screencap",l:"s"},{v:"Manga",l:"M"},
   {v:"moeManga",l:"m"},{v:"TestPanel",l:"T"}
 ];
-
-let instances=[];
 
 class ImageInstance{
   constructor(){
     this.history=[];
     this.future=[];
-    this.sources=[];
-    this.preloadQueue=[];
+    this.sourceLists={};
+    this.preloadImages=[];
     this.createUI();
   }
 
   createUI(){
     this.el=document.createElement('div');
     this.el.className='instance';
-
     this.el.innerHTML=`
       <div class="search-bar"><input placeholder="Search (#tag)"></div>
       <div class="toggles">
@@ -134,53 +166,58 @@ class ImageInstance{
     this.img=this.el.querySelector('img');
     this.el.querySelector('.left').onclick=()=>this.back();
     this.el.querySelector('.right').onclick=()=>this.forward();
-    this.el.querySelector('.resetBtn').onclick=()=>{};
+    this.el.querySelector('.resetBtn').onclick=()=>this.reset();
+
     this.search=this.el.querySelector('input');
     this.checks=this.el.querySelectorAll('input[type=checkbox]');
-    this.checks.forEach(c=>c.onchange=()=>this.reload());
-    this.search.oninput=()=>this.reload();
+    this.checks.forEach(c=>c.onchange=()=>this.reloadSources());
+    this.search.oninput=()=>this.reloadSources();
   }
 
-  async fetchLinks(cat){
+  reset(){}
+
+  async fetchLinks(subject){
     try{
-      const r=await fetch(baseURL+cat+'.txt');
-      return (await r.text())
-        .split('\n')
-        .map(l=>l.trim())
-        .filter(l=>IMAGE_EXT.test(l));
+      const r=await fetch(`${baseURL}${subject}.txt`);
+      return (await r.text()).split('\n').map(l=>l.trim()).filter(l=>IMAGE_EXT.test(l));
     }catch{return []}
   }
 
-  async reload(){
+  async reloadSources(){
     const sel=[...this.checks].filter(c=>c.checked).map(c=>c.value);
     if(!sel.length) return;
-
-    const lists=await Promise.all(sel.map(s=>this.fetchLinks(s)));
-    this.sources=lists.flat();
-
-    this.history=[];
-    this.future=[];
-    this.preloadQueue=[];
+    const res=await Promise.all(sel.map(s=>this.fetchLinks(s)));
+    this.sourceLists=Object.fromEntries(sel.map((s,i)=>[s,res[i]]));
+    this.history=[]; this.future=[]; this.preloadImages=[];
     this.forward(true);
   }
 
-  preload(){
-    while(this.preloadQueue.length<5 && this.sources.length){
-      const url=this.sources[Math.random()*this.sources.length|0];
-      if(!this.preloadQueue.includes(url)) this.preloadQueue.push(url);
+  async randomImage(){
+    const keys=Object.keys(this.sourceLists);
+    if(!keys.length) return null;
+    for(let i=0;i<20;i++){
+      const k=keys[Math.floor(Math.random()*keys.length)];
+      const list=this.sourceLists[k];
+      if(!list.length) continue;
+      return list[Math.floor(Math.random()*list.length)];
+    }
+    return null;
+  }
+
+  preloadNext(n=8){
+    if(this.preloadImages.length>=n) return;
+    while(this.preloadImages.length<n){
+      this.randomImage().then(u=>u && this.preloadImages.push(u));
     }
   }
 
-  show(url){
-    if(url) this.img.src=url;
-  }
-
-  forward(force=false){
+  async forward(force=false){
     if(!force && this.future.length){
       const next=this.future.shift();
       this.history.push(this.img.src);
       if(this.history.length>4) this.history.shift();
       this.show(next);
+      this.preloadNext();
       return;
     }
 
@@ -189,10 +226,10 @@ class ImageInstance{
       if(this.history.length>4) this.history.shift();
     }
 
-    const next=this.preloadQueue.shift() || this.sources[Math.random()*this.sources.length|0];
+    let next=this.preloadImages.shift() || await this.randomImage();
+    if(next) this.show(next);
     this.future=[];
-    this.show(next);
-    this.preload();
+    this.preloadNext();
   }
 
   back(){
@@ -201,6 +238,8 @@ class ImageInstance{
     if(this.future.length>4) this.future.pop();
     this.show(this.history.pop());
   }
+
+  show(url){this.img.src=url;}
 }
 
 function createInstances(n){
