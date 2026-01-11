@@ -29,17 +29,25 @@ body.hide-ui .controls{display:none;}
   display:flex;flex-direction:column;gap:5px;
 }
 
-.row{display:flex;width:100%;gap:5px;}
-.instance{position:relative;width:100%;flex:1;display:flex;flex-direction:column;}
+.instance{
+  position:relative;
+  width:100%;
+  flex:1;
+  display:flex;
+  flex-direction:column;
+}
 
 .image-wrapper{
-  flex:1;position:relative;overflow:hidden;
+  flex:1;
+  position:relative;
+  overflow:hidden; /* 🔒 keeps image inside its instance */
 }
 
 .instance img{
   width:100%;
   height:100%;
-  object-fit:cover;              /* 🔥 zoom to fit */
+  object-fit:contain;     /* ✅ dynamic fit */
+  object-position:center;
   border:2px solid #fff;
   border-radius:6px;
 }
@@ -126,15 +134,12 @@ class ImageInstance{
     this.img=this.el.querySelector('img');
     this.el.querySelector('.left').onclick=()=>this.back();
     this.el.querySelector('.right').onclick=()=>this.forward();
-    this.el.querySelector('.resetBtn').onclick=()=>this.reset();
-
+    this.el.querySelector('.resetBtn').onclick=()=>{};
     this.search=this.el.querySelector('input');
     this.checks=this.el.querySelectorAll('input[type=checkbox]');
     this.checks.forEach(c=>c.onchange=()=>this.reload());
     this.search.oninput=()=>this.reload();
   }
-
-  reset(){}
 
   async fetchLinks(cat){
     try{
@@ -159,19 +164,15 @@ class ImageInstance{
     this.forward(true);
   }
 
-  async preload(){
-    while(this.preloadQueue.length<5){
+  preload(){
+    while(this.preloadQueue.length<5 && this.sources.length){
       const url=this.sources[Math.random()*this.sources.length|0];
-      if(!url || this.preloadQueue.includes(url)) break;
-      const img=new Image();
-      img.src=url;
-      this.preloadQueue.push(url);
+      if(!this.preloadQueue.includes(url)) this.preloadQueue.push(url);
     }
   }
 
   show(url){
-    if(!url) return;
-    this.img.src=url;
+    if(url) this.img.src=url;
   }
 
   forward(force=false){
@@ -198,8 +199,7 @@ class ImageInstance{
     if(!this.history.length) return;
     this.future.unshift(this.img.src);
     if(this.future.length>4) this.future.pop();
-    const prev=this.history.pop();
-    this.show(prev);
+    this.show(this.history.pop());
   }
 }
 
