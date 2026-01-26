@@ -4,9 +4,9 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
   <meta name="apple-mobile-web-app-capable" content="yes">
-  <title>Ref Navigator Pro</title>
+  <title>Ref Navigator Balanced</title>
   <style>
-    :root { --bg: #000000; --ui-bg: rgba(20,20,20,0.9); --accent: #4a90e2; }
+    :root { --bg: #000000; --ui-bg: rgba(20,20,20,0.95); --accent: #4a90e2; }
     
     body {
       margin: 0; padding: 0; background: var(--bg); color: #fff;
@@ -15,31 +15,25 @@
       user-select: none; -webkit-user-select: none;
     }
 
-    /* --- CANVAS / IMAGE --- */
     .viewport {
       position: absolute; top: 0; left: 0;
       width: 100vw; height: 100vh;
       display: flex; align-items: center; justify-content: center;
-      touch-action: none; /* Prevents browser scroll */
-      z-index: 1;
+      touch-action: none; z-index: 1;
     }
 
     #mainImage {
       width: 100%; height: 100%;
-      object-fit: contain; /* Maximize size without distortion */
+      object-fit: contain;
       will-change: transform;
       cursor: grab;
+      transition: opacity 0.2s;
     }
     #mainImage:active { cursor: grabbing; }
 
-    /* --- UI LAYOUT --- */
-    .ui-layer {
-      position: fixed; z-index: 100;
-      display: flex; pointer-events: none;
-    }
+    .ui-layer { position: fixed; z-index: 100; display: flex; pointer-events: none; }
     .ui-layer > * { pointer-events: auto; }
 
-    /* Top Center: Search & Categories */
     .top-center {
       top: 10px; left: 50%; transform: translateX(-50%);
       flex-direction: column; align-items: center; gap: 8px;
@@ -50,31 +44,25 @@
       background: var(--ui-bg); border: 1px solid #444; color: #fff;
       padding: 6px 12px; border-radius: 20px; font-size: 14px;
       width: 160px; text-align: center; outline: none;
-      backdrop-filter: blur(5px);
     }
 
-    /* Fixed the "Huge UI" bug: Used Flex instead of Grid */
     .category-container {
       display: flex; flex-wrap: wrap; justify-content: center; gap: 4px;
       background: var(--ui-bg); padding: 5px; border-radius: 10px;
-      backdrop-filter: blur(5px);
       max-width: 100%;
     }
 
     .cat-btn {
-      width: 30px; height: 30px; /* Force small square size */
+      width: 32px; height: 32px;
       display: flex; align-items: center; justify-content: center;
       background: #333; border-radius: 5px; cursor: pointer;
-      font-size: 12px; font-weight: bold; color: #aaa;
-      transition: all 0.1s;
+      font-size: 13px; font-weight: bold; color: #aaa;
     }
     .cat-btn input { display: none; }
-    /* Checkbox Logic: The label is the button */
     .cat-btn:has(input:checked) {
-      background: var(--accent); color: #fff; box-shadow: 0 0 8px var(--accent);
+      background: var(--accent); color: #fff;
     }
 
-    /* Navigation Buttons */
     .side-nav {
       top: 50%; width: 100%; transform: translateY(-50%);
       justify-content: space-between; padding: 0 10px; box-sizing: border-box;
@@ -82,14 +70,13 @@
     }
     .nav-btn {
       pointer-events: auto;
-      background: rgba(0,0,0,0.4); border: 1px solid rgba(255,255,255,0.1);
-      color: white; font-size: 24px; padding: 15px 10px;
-      border-radius: 8px; cursor: pointer; transition: background 0.2s;
+      background: rgba(0,0,0,0.3); border: 1px solid rgba(255,255,255,0.1);
+      color: white; font-size: 24px; padding: 20px 12px;
+      border-radius: 8px; cursor: pointer;
     }
     .nav-btn:hover { background: rgba(50,50,50,0.8); }
-    .nav-btn:disabled { opacity: 0.2; cursor: default; }
+    .nav-btn:disabled { opacity: 0.1; cursor: default; }
 
-    /* Bottom Tools */
     .bottom-bar {
       bottom: 20px; left: 50%; transform: translateX(-50%);
       gap: 15px; background: var(--ui-bg); padding: 8px 15px; border-radius: 20px;
@@ -100,28 +87,28 @@
     }
     .tool-btn:hover { color: #fff; transform: scale(1.1); }
 
-    /* Hiding & Loading */
     .hidden-ui .ui-layer { display: none !important; }
     
     #loader {
       position: fixed; top: 50%; left: 50%; transform: translate(-50%,-50%);
-      background: rgba(0,0,0,0.8); padding: 8px 16px; border-radius: 12px;
-      font-size: 12px; letter-spacing: 1px; pointer-events: none; display: none;
+      background: rgba(0,0,0,0.8); padding: 10px 20px; border-radius: 12px;
+      font-size: 14px; letter-spacing: 1px; pointer-events: none; display: none;
+      color: #fff; border: 1px solid #444;
     }
+    .error-flash { color: #ff6b6b !important; border-color: #ff6b6b !important; }
   </style>
 </head>
 <body>
 
 <div class="ui-layer top-center">
   <input type="text" id="searchInput" class="search-box" placeholder="Search #tag">
-  <div id="catWrapper" class="category-container">
-    </div>
+  <div id="catWrapper" class="category-container"></div>
 </div>
 
 <div class="viewport">
   <img id="mainImage" draggable="false" />
 </div>
-<div id="loader">LOADING</div>
+<div id="loader">LOADING...</div>
 
 <div class="ui-layer side-nav">
   <button id="backBtn" class="nav-btn">❮</button>
@@ -129,34 +116,32 @@
 </div>
 
 <div class="ui-layer bottom-bar">
-  <button id="resetBtn" class="tool-btn" title="Reset (R)">↻</button>
-  <button id="flipBtn" class="tool-btn" title="Flip (F)">↔</button>
-  <button id="copyBtn" class="tool-btn" title="Copy">📋</button>
-  <button id="uiBtn" class="tool-btn" title="Toggle UI (U)">👁</button>
+  <button id="resetBtn" class="tool-btn">↻</button>
+  <button id="flipBtn" class="tool-btn">↔</button>
+  <button id="copyBtn" class="tool-btn">📋</button>
+  <button id="uiBtn" class="tool-btn">👁</button>
 </div>
 
 <script>
-  // --- CONFIG ---
   const baseURL = 'https://f003.backblazeb2.com/file/linksref2/';
   const categories = [
     {v:"People",l:"P"},{v:"pplus",l:"p"},{v:"Anime",l:"A"},{v:"angle",l:"a"},{v:"Figure",l:"F"},{v:"Style",l:"S"},
     {v:"XMaleAnatomy",l:"X"},{v:"Emotions",l:"E"},{v:"Background",l:"B"},{v:"Walk",l:"W"},{v:"screencap",l:"s"},{v:"Manga",l:"M"},
     {v:"moeManga",l:"m"},{v:"TestPanel",l:"T"}
   ];
-  
-  // --- STATE ---
+
   const state = {
-    sources: {},       // Cache for text files
-    backStack: [],     // History
-    forwardStack: [],  // Redo history
-    preloadQueue: [],  // Future random buffer
+    sources: {},
+    backStack: [],
+    forwardStack: [],
+    preloadQueue: [],
     currentUrl: null,
     transform: { x:0, y:0, scale:1, flipped:false },
     isDragging: false,
-    dragStart: { x:0, y:0 }
+    dragStart: { x:0, y:0 },
+    loadingTimeout: null
   };
 
-  // --- ELEMENTS ---
   const el = {
     img: document.getElementById('mainImage'),
     cats: document.getElementById('catWrapper'),
@@ -166,9 +151,7 @@
     btnFwd: document.getElementById('fwdBtn')
   };
 
-  // --- INIT ---
   function init() {
-    // 1. Build Categories
     categories.forEach(cat => {
       const label = document.createElement('label');
       label.className = 'cat-btn';
@@ -176,36 +159,27 @@
       el.cats.appendChild(label);
     });
     
-    // Select first by default
+    // Default select first
     const first = el.cats.querySelector('input');
     if(first) first.checked = true;
 
-    // 2. Bind Events
     bindControls();
-    
-    // 3. Initial Load
     fullRefresh(); 
   }
 
-  // --- LOGIC ---
-
-  // Called when Category or Search changes
   async function fullRefresh() {
-    // WIPE EVERYTHING
     state.backStack = [];
     state.forwardStack = [];
     state.preloadQueue = [];
     state.currentUrl = null;
-    
     updateNavButtons();
     
     await fetchSelectedSources();
-    navigateForward(true); // true = force new image
+    navigateForward(true); 
   }
 
   async function fetchSelectedSources() {
     const active = [...el.cats.querySelectorAll('input:checked')].map(i => i.value);
-    
     const jobs = active.map(async key => {
       if(!state.sources[key]) {
         try {
@@ -217,33 +191,46 @@
       }
     });
     await Promise.all(jobs);
-    fillQueue();
   }
 
-  function getPool() {
-    const active = [...el.cats.querySelectorAll('input:checked')].map(i => i.value);
+  // --- NEW: BALANCED SELECTION LOGIC ---
+  function getNextRandomUrl() {
+    const activeCats = [...el.cats.querySelectorAll('input:checked')].map(i => i.value);
     const term = el.search.value.toLowerCase().trim();
-    let pool = [];
-    
-    active.forEach(k => { if(state.sources[k]) pool.push(...state.sources[k]); });
-    
-    if(term) {
+
+    // Strategy 1: Search is active (Must use pool method)
+    if (term) {
+      let pool = [];
+      activeCats.forEach(k => { if(state.sources[k]) pool.push(...state.sources[k]); });
+      
       const tags = term.split('#').filter(Boolean);
       if(tags.length) pool = pool.filter(u => tags.some(t => u.toLowerCase().includes(t)));
       else pool = pool.filter(u => u.toLowerCase().includes(term));
+      
+      if(pool.length) return pool[Math.floor(Math.random() * pool.length)];
+      return null;
     }
-    return pool;
+
+    // Strategy 2: No search (Use Balanced Category method)
+    // Filter to only categories that actually have loaded images
+    const validCats = activeCats.filter(k => state.sources[k] && state.sources[k].length > 0);
+    
+    if (validCats.length === 0) return null;
+
+    // 1. Pick a random Category (Equal Chance)
+    const randomCatKey = validCats[Math.floor(Math.random() * validCats.length)];
+    // 2. Pick a random Image from that Category
+    const catList = state.sources[randomCatKey];
+    return catList[Math.floor(Math.random() * catList.length)];
   }
 
   function fillQueue() {
-    const pool = getPool();
-    if(!pool.length) return;
-    
-    // Fill up to 8
-    while(state.preloadQueue.length < 8) {
-      const url = pool[Math.floor(Math.random() * pool.length)];
-      // Background load image into browser cache
-      new Image().src = url; 
+    while(state.preloadQueue.length < 5) { // Reduced buffer to 5 to save bandwidth
+      const url = getNextRandomUrl();
+      if(!url) break;
+      // Preload image
+      const img = new Image();
+      img.src = url;
       state.preloadQueue.push(url);
     }
     updateNavButtons();
@@ -252,21 +239,22 @@
   function navigateForward(forceNew = false) {
     let next = null;
 
-    // 1. Try Forward History (Redo)
     if(!forceNew && state.forwardStack.length > 0) {
       if(state.currentUrl) pushHistory(state.currentUrl);
       next = state.forwardStack.shift();
     }
-    // 2. Try Random Queue
     else if(state.preloadQueue.length > 0) {
       if(state.currentUrl) pushHistory(state.currentUrl);
       next = state.preloadQueue.shift();
-      fillQueue();
+      setTimeout(fillQueue, 100); // Refill in background
     }
-    // 3. Fallback (Queue empty?)
     else {
-      const pool = getPool();
-      if(pool.length) next = pool[Math.floor(Math.random() * pool.length)];
+      // Direct fetch if queue empty
+      const fresh = getNextRandomUrl();
+      if(fresh) {
+        if(state.currentUrl) pushHistory(state.currentUrl);
+        next = fresh;
+      }
     }
 
     if(next) showImage(next);
@@ -274,28 +262,41 @@
 
   function navigateBack() {
     if(state.backStack.length === 0) return;
-    
     if(state.currentUrl) {
       state.forwardStack.unshift(state.currentUrl);
-      if(state.forwardStack.length > 5) state.forwardStack.pop();
+      if(state.forwardStack.length > 10) state.forwardStack.pop();
     }
-    
     const prev = state.backStack.pop();
     showImage(prev);
   }
 
   function pushHistory(url) {
     state.backStack.push(url);
-    if(state.backStack.length > 5) state.backStack.shift();
+    if(state.backStack.length > 10) state.backStack.shift();
   }
 
   function showImage(url) {
+    // Clear previous timeout
+    if(state.loadingTimeout) clearTimeout(state.loadingTimeout);
+
     state.currentUrl = url;
+    el.loader.innerText = "LOADING";
+    el.loader.classList.remove('error-flash');
     el.loader.style.display = 'block';
-    el.img.style.opacity = '0.5';
+    el.img.style.opacity = '0.3';
+
+    // --- NEW: TIMEOUT LOGIC ---
+    // If image takes > 3 seconds, kill it and move on
+    state.loadingTimeout = setTimeout(() => {
+        el.loader.innerText = "TIMEOUT (Skipping)";
+        el.loader.classList.add('error-flash');
+        console.log("Image timed out:", url);
+        setTimeout(() => navigateForward(true), 500); // Wait 0.5s then skip
+    }, 3000);
 
     const i = new Image();
     i.onload = () => {
+      clearTimeout(state.loadingTimeout); // Success! Stop the timer
       el.img.src = url;
       el.img.style.opacity = '1';
       el.loader.style.display = 'none';
@@ -303,19 +304,20 @@
       updateNavButtons();
     };
     i.onerror = () => {
-      console.log('Dead link, skipping');
-      navigateForward(true); // Auto-skip
+      clearTimeout(state.loadingTimeout);
+      console.log('Dead link');
+      navigateForward(true);
     };
     i.src = url;
   }
 
   function updateNavButtons() {
     el.btnBack.disabled = (state.backStack.length === 0);
-    // Can always go forward unless literally 0 images exist in selection
-    el.btnFwd.disabled = (state.forwardStack.length === 0 && state.preloadQueue.length === 0 && getPool().length === 0);
+    // Only disable forward if literally nothing is available
+    const hasSources = [...el.cats.querySelectorAll('input:checked')].some(k => state.sources[k] && state.sources[k].length > 0);
+    el.btnFwd.disabled = (!hasSources && state.forwardStack.length === 0);
   }
 
-  // --- TRANSFORMS ---
   function applyTransform() {
     const {x, y, scale, flipped} = state.transform;
     const f = flipped ? -1 : 1;
@@ -326,17 +328,10 @@
     applyTransform();
   }
 
-  // --- EVENTS ---
   function bindControls() {
-    // UI Interaction
     el.cats.addEventListener('change', fullRefresh);
-    el.search.addEventListener('input', () => {
-      // Debounce slightly or just clear queue
-      state.preloadQueue = [];
-      fillQueue();
-    });
+    el.search.addEventListener('input', () => { state.preloadQueue = []; fillQueue(); });
 
-    // Buttons
     el.btnFwd.onclick = () => navigateForward();
     el.btnBack.onclick = navigateBack;
     document.getElementById('resetBtn').onclick = resetTransform;
@@ -344,7 +339,6 @@
     document.getElementById('uiBtn').onclick = () => document.body.classList.toggle('hidden-ui');
     document.getElementById('copyBtn').onclick = () => { if(state.currentUrl) navigator.clipboard.writeText(state.currentUrl); };
 
-    // Keyboard
     document.addEventListener('keydown', e => {
       if(document.activeElement === el.search) return;
       const k = e.key.toLowerCase();
@@ -357,7 +351,6 @@
       if(k==='u') document.body.classList.toggle('hidden-ui');
     });
 
-    // Dragging (Mouse + Touch)
     const startDrag = (x,y) => {
       state.isDragging = true;
       state.dragStart = { x: x - state.transform.x, y: y - state.transform.y };
