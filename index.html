@@ -1,224 +1,255 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-<meta charset="UTF-8">
-<meta name="viewport" content="width=device-width,initial-scale=1.0">
-<title>Ultra Fast Preload Image Navigator</title>
-<style>
-*{box-sizing:border-box;}
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=yes">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <title>Ref Navigator Pro</title>
+  <style>
+    :root { --bg: #0b0b0b; --ui-bg: rgba(30,30,30,0.85); --accent: #4a90e2; }
+    body {
+      margin: 0; padding: 0; background: var(--bg); color: #fff;
+      font-family: system-ui, -apple-system, sans-serif;
+      height: 100vh; overflow: hidden; user-select: none;
+    }
 
-body {margin:0;background:#000;color:#fff;font-family:sans-serif;display:flex;flex-direction:column;align-items:center;height:100vh;overflow:hidden;}
-#topControls {position:fixed;top:5px;z-index:1000;display:flex;gap:10px;background:rgba(0,0,0,0.5);padding:5px 10px;border-radius:8px;}
-body.hide-ui #topControls, body.hide-ui .toggles, body.hide-ui .search-bar, body.hide-ui .controls {display:none;}
-#instancesContainer {margin-top:50px;width:100%;height:100%;display:flex;flex-direction:column;gap:5px;min-height:0;}
-.row{display:flex;width:100%;gap:5px;min-height:0;}
-.instance{position:relative;flex:1;display:flex;flex-direction:column;min-height:0;}
-.image-wrapper{flex:1;display:flex;align-items:center;justify-content:center;position:relative;overflow:hidden;min-height:0;}
-.instance img{width:100%;height:100%;object-fit:contain;border:2px solid #fff;border-radius:6px;}
-.nav-arrow{position:absolute;top:50%;transform:translateY(-50%);font-size:48px;color:white;opacity:0.5;cursor:pointer;z-index:20;}
-.nav-arrow.left{left:10px;} .nav-arrow.right{right:10px;}
-.toggles,.search-bar,.controls{position:absolute;z-index:10;background:rgba(0,0,0,0.5);padding:3px 5px;border-radius:4px;display:flex;gap:4px;flex-wrap:wrap;}
-.toggles{top:5px;left:50%;transform:translateX(-50%);} .search-bar{top:5px;left:5px;} .controls{bottom:5px;left:50%;transform:translateX(-50%);}
-</style>
+    /* Image Layer */
+    .viewport {
+      width: 100vw; height: 100vh; display: flex; 
+      align-items: center; justify-content: center; overflow: hidden;
+    }
+    #mainImage {
+      max-width: 100%; max-height: 100%; object-fit: contain;
+      border: 2px solid #333; border-radius: 4px;
+      transition: transform 0.15s cubic-bezier(0.2, 0, 0.2, 1);
+      will-change: transform; cursor: grab;
+    }
+    #mainImage:active { cursor: grabbing; }
+
+    /* UI Components */
+    .panel { position: fixed; z-index: 100; display: flex; gap: 8px; pointer-events: none; }
+    .panel > * { pointer-events: auto; }
+    
+    .top-bar { top: 10px; left: 10px; right: 10px; justify-content: space-between; align-items: start; }
+    .bottom-bar { bottom: 20px; left: 50%; transform: translateX(-50%); }
+    .side-nav { top: 50%; width: 100%; transform: translateY(-50%); justify-content: space-between; padding: 0 15px; box-sizing: border-box; }
+
+    /* Inputs & Buttons */
+    .search-input { 
+      background: var(--ui-bg); border: 1px solid #444; color: #fff;
+      padding: 8px 12px; border-radius: 20px; outline: none; width: 180px;
+    }
+    .tag-grid { 
+      display: grid; grid-template-columns: repeat(7, 1fr); gap: 4px;
+      background: var(--ui-bg); padding: 8px; border-radius: 12px;
+    }
+    .tag-grid label {
+      display: flex; align-items: center; justify-content: center;
+      width: 32px; height: 32px; border-radius: 6px; background: #222;
+      font-weight: bold; font-size: 0.8em; cursor: pointer; transition: 0.2s;
+    }
+    .tag-grid input:checked + span { color: var(--accent); text-shadow: 0 0 5px var(--accent); }
+    .tag-grid input { display: none; }
+
+    button {
+      background: var(--ui-bg); border: none; color: #fff;
+      padding: 10px 18px; border-radius: 8px; cursor: pointer;
+      font-size: 1.1em; transition: 0.2s; backdrop-filter: blur(5px);
+    }
+    button:hover { background: #444; }
+    button:disabled { opacity: 0.2; cursor: not-allowed; }
+
+    .hidden-ui .panel, .hidden-ui .version { display: none !important; }
+    .version { position: fixed; bottom: 5px; right: 10px; font-size: 10px; opacity: 0.4; }
+    
+    /* Utilities */
+    .loading-spin { animation: spin 1s infinite linear; }
+    @keyframes spin { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }
+  </style>
 </head>
 <body>
 
-<div id="topControls">
-<label>Instances:
-  <select id="instanceCount"><option value="1">1</option><option value="2">2</option><option value="3">3</option></select>
-</label>
-<label><input type="checkbox" id="layoutToggle"> Custom Layout</label>
-<button id="hideUIBtn">Hide UI</button>
+<div class="panel top-bar">
+  <input type="text" id="searchInput" class="search-input" placeholder="Search tags...">
+  <div id="categoryGrid" class="tag-grid"></div>
+  <button id="uiToggle">☰</button>
 </div>
 
-<div id="instancesContainer"></div>
+<div class="viewport">
+  <img id="mainImage" draggable="false" />
+</div>
+
+<div class="panel side-nav">
+  <button id="backBtn">←</button>
+  <button id="forwardBtn">→</button>
+</div>
+
+<div class="panel bottom-bar">
+  <button id="resetBtn" title="Reset">↻</button>
+  <button id="flipBtn" title="Flip">↔</button>
+  <button id="copyBtn" title="Copy URL">📋</button>
+  <button id="openBtn" title="Open Original">🔗</button>
+</div>
+
+<div class="version">V4.0 (Optimized)</div>
 
 <script>
-const baseURL='https://f003.backblazeb2.com/file/linksref2/';
-const IMAGE_EXT=/\.(jpg|jpeg|png|webp|gif|avif|bmp)$/i;
-let instances=[];
-const categories=[
-  {v:"People",l:"P"},{v:"pplus",l:"p"},{v:"Anime",l:"A"},{v:"angle",l:"a"},{v:"Figure",l:"F"},{v:"Style",l:"S"},
-  {v:"XMaleAnatomy",l:"X"},{v:"Emotions",l:"E"},{v:"Background",l:"B"},{v:"Walk",l:"W"},{v:"screencap",l:"s"},{v:"Manga",l:"M"},
-  {v:"moeManga",l:"m"},{v:"TestPanel",l:"T"}
-];
+  const baseURL = 'https://f003.backblazeb2.com/file/linksref2/';
+  const categories = [
+    {v:"People",l:"P"},{v:"pplus",l:"p"},{v:"Anime",l:"A"},{v:"angle",l:"a"},{v:"Figure",l:"F"},{v:"Style",l:"S"},
+    {v:"XMaleAnatomy",l:"X"},{v:"Emotions",l:"E"},{v:"Background",l:"B"},{v:"Walk",l:"W"},{v:"screencap",l:"s"},{v:"Manga",l:"M"},
+    {v:"moeManga",l:"m"},{v:"TestPanel",l:"T"}
+  ];
 
-class ImageInstance{
-  constructor(){
-    this.history=[]; this.future=[];
-    this.sourceLists={};
-    this.preloadImages=[];
-    this.loadToken=0;
-    this.createUI();
-  }
+  // State Management
+  const state = {
+    sourceData: {},
+    history: [],
+    forward: [],
+    currentIndex: -1,
+    transform: { x: 0, y: 0, scale: 1, flipped: false },
+    isDragging: false,
+    start: { x: 0, y: 0 }
+  };
 
-  createUI(){
-    this.el=document.createElement('div');
-    this.el.className='instance';
-    this.el.innerHTML=`
-      <div class="search-bar"><input placeholder="Search (#tag)"></div>
-      <div class="toggles">${categories.map(c=>`<label><input type="checkbox" value="${c.v}">${c.l}</label>`).join('')}</div>
-      <div class="image-wrapper">
-        <div class="nav-arrow left">&#10094;</div>
-        <div class="nav-arrow right">&#10095;</div>
-        <img draggable="false">
-      </div>
-      <div class="controls"><button class="resetBtn">Reset</button></div>`;
-    this.img=this.el.querySelector('img');
-    this.el.querySelector('.left').onclick=()=>this.back();
-    this.el.querySelector('.right').onclick=()=>this.forward();
-    this.el.querySelector('.resetBtn').onclick=()=>this.reset();
+  const img = document.getElementById('mainImage');
+  const catGrid = document.getElementById('categoryGrid');
 
-    this.search=this.el.querySelector('input');
-    this.checks=this.el.querySelectorAll('input[type=checkbox]');
-
-    // Category checkboxes now reset the instance (old behavior)
-    this.checks.forEach(c=>{
-      c.onchange=()=>{ this.resetInstance(); this.reloadSources(); }
+  /** 1. Initialize UI **/
+  function init() {
+    categories.forEach(cat => {
+      const label = document.createElement('label');
+      label.innerHTML = `<input type="checkbox" value="${cat.v}"><span>${cat.l}</span>`;
+      catGrid.appendChild(label);
     });
-    this.search.oninput=()=>{ this.resetInstance(); this.reloadSources(); }
+
+    bindEvents();
+    // Load first selection if any
+    const firstCheck = catGrid.querySelector('input');
+    firstCheck.checked = true;
+    updateLibrary();
   }
 
-  reset(){this.img.style.transform='translate(-50%,-50%) scale(1)';}
-
-  resetInstance(){
-    // Minimal reset to preserve navigation system integrity
-    this.history=[]; 
-    this.future=[]; 
-    this.preloadImages=[];
-    this.img.src='';
-  }
-
-  async fetchLinks(subject){
-    try{
-      const r=await fetch(`${baseURL}${subject}.txt`);
-      return (await r.text()).split('\n').map(l=>l.trim()).filter(l=>IMAGE_EXT.test(l));
-    }catch{return []}
-  }
-
-  async reloadSources(){
-    const token=++this.loadToken;
-    const sel=[...this.checks].filter(c=>c.checked).map(c=>c.value);
-    if(!sel.length) return;
-    const res=await Promise.all(sel.map(s=>this.fetchLinks(s)));
-    if(token!==this.loadToken) return;
-    this.sourceLists=Object.fromEntries(sel.map((s,i)=>[s,res[i]]));
-    const first=await this.randomImage();
-    if(first && token===this.loadToken){ this.show(first); this.preloadNext(); }
-  }
-
-  async loadValidImage(url){
-    return new Promise(resolve=>{
-      const img=new Image();
-      img.decoding='async';
-      img.src=url;
-      img.onload=()=>resolve(img.naturalWidth>=150 && img.naturalHeight>=150 ? url : null);
-      img.onerror=()=>resolve(null);
-    });
-  }
-
-  async randomImage(){
-    const keys=Object.keys(this.sourceLists); if(!keys.length) return null;
-    for(let i=0;i<20;i++){
-      const k=keys[Math.floor(Math.random()*keys.length)];
-      const list=this.sourceLists[k]; if(!list.length) continue;
-      const candidate=list[Math.floor(Math.random()*list.length)];
-      const valid=await this.loadValidImage(candidate);
-      if(valid) return valid;
+  /** 2. Networking **/
+  async function updateLibrary() {
+    const active = [...catGrid.querySelectorAll('input:checked')].map(i => i.value);
+    for (const val of active) {
+      if (!state.sourceData[val]) {
+        try {
+          const res = await fetch(`${baseURL}${val}.txt`);
+          const text = await res.text();
+          state.sourceData[val] = text.split('\n').filter(l => l.trim().length > 5);
+        } catch (e) { console.error("Fetch failed", val); }
+      }
     }
-    return null;
+    if (state.currentIndex === -1) nextImage();
   }
 
-  async preloadNext(n=5){
-    for(let i=0;i<n;i++){
-      this.randomImage().then(url=>{
-        if(url) this.preloadImages.push(url);
-        if(this.preloadImages.length>n) this.preloadImages.shift();
-      });
+  /** 3. Image Logic **/
+  function getFilteredPool() {
+    const activeKeys = [...catGrid.querySelectorAll('input:checked')].map(i => i.value);
+    const query = document.getElementById('searchInput').value.toLowerCase();
+    let pool = [];
+    activeKeys.forEach(k => {
+      if (state.sourceData[k]) pool.push(...state.sourceData[k]);
+    });
+    return query ? pool.filter(url => url.toLowerCase().includes(query)) : pool;
+  }
+
+  function nextImage() {
+    const pool = getFilteredPool();
+    if (!pool.length) return alert("No images match selection.");
+    
+    if (img.src) state.history.push(img.src);
+    if (state.history.length > 20) state.history.shift();
+    
+    const newUrl = pool[Math.floor(Math.random() * pool.length)];
+    loadImage(newUrl);
+  }
+
+  function prevImage() {
+    if (state.history.length) {
+      const prev = state.history.pop();
+      loadImage(prev);
     }
   }
 
-  async forward(force=false){
-    if(!force && this.future.length){
-      const next=this.future.shift();
-      this.history.push(this.img.src);
-      if(this.history.length>4) this.history.shift();
-      this.show(next);
-      this.preloadNext(); return;
-    }
-    if(this.img.src){this.history.push(this.img.src); if(this.history.length>4)this.history.shift();}
-    let next=null;
-    if(this.preloadImages.length) next=this.preloadImages.shift();
-    else next=await this.randomImage();
-    if(next) this.show(next);
-    this.future=[];
-    this.preloadNext();
+  function loadImage(url) {
+    img.style.opacity = '0.3';
+    const temp = new Image();
+    temp.onload = () => {
+      img.src = url;
+      img.style.opacity = '1';
+      resetTransform();
+    };
+    temp.src = url;
+    updateButtonStates();
   }
 
-  back(){
-    if(!this.history.length) return;
-    this.future.unshift(this.img.src);
-    if(this.future.length>4) this.future.pop();
-    const prev=this.history.pop();
-    this.show(prev);
+  /** 4. Transforms **/
+  function updateStyle() {
+    const { x, y, scale, flipped } = state.transform;
+    img.style.transform = `translate(${x}px, ${y}px) scale(${scale * (flipped ? -1 : 1)}, ${scale})`;
   }
 
-  show(url){this.img.src=url;}
-}
-
-function createInstances(n){
-  const c=document.getElementById('instancesContainer'); 
-  c.innerHTML=''; instances=[];
-  for(let i=0;i<n;i++){const inst=new ImageInstance(); instances.push(inst);}
-  applyLayout();
-}
-
-function applyLayout(){
-  const c=document.getElementById('instancesContainer');
-  c.innerHTML='';
-  const n=instances.length;
-  const custom=document.getElementById('layoutToggle').checked;
-
-  if(custom && n===2){
-    const r1=document.createElement('div'); r1.className='row'; r1.style.flex='0 0 66%';
-    const r2=document.createElement('div'); r2.className='row'; r2.style.flex='0 0 34%';
-    r1.appendChild(instances[0].el);
-    r2.appendChild(instances[1].el);
-    c.append(r1,r2);
-  }
-  else if(custom && n===3){
-    const r1=document.createElement('div'); r1.className='row'; r1.style.flex='0 0 66%';
-    const r2=document.createElement('div'); r2.className='row'; r2.style.flex='0 0 34%';
-    r2.style.flexDirection='row';
-    r1.appendChild(instances[0].el);
-    r2.appendChild(instances[1].el);
-    r2.appendChild(instances[2].el);
-    c.append(r1,r2);
-  }
-  else{
-    instances.forEach(i=>{
-      const r=document.createElement('div');
-      r.className='row';
-      r.appendChild(i.el);
-      c.appendChild(r);
-    });
+  function resetTransform() {
+    state.transform = { x: 0, y: 0, scale: 1, flipped: false };
+    updateStyle();
   }
 
-  // Reset all instances when layout changes
-  instances.forEach(inst=>inst.resetInstance());
-}
+  /** 5. Event Listeners **/
+  function bindEvents() {
+    // Inputs
+    catGrid.addEventListener('change', updateLibrary);
+    document.getElementById('searchInput').addEventListener('input', () => {}); // Optional: live filter
 
-document.getElementById('instanceCount').onchange=e=>createInstances(+e.target.value);
-document.getElementById('layoutToggle').onchange=applyLayout;
-document.getElementById('hideUIBtn').onclick=()=>document.body.classList.toggle('hide-ui');
+    // Navigation
+    document.getElementById('forwardBtn').onclick = nextImage;
+    document.getElementById('backBtn').onclick = prevImage;
+    
+    // Tools
+    document.getElementById('resetBtn').onclick = resetTransform;
+    document.getElementById('flipBtn').onclick = () => { state.transform.flipped = !state.transform.flipped; updateStyle(); };
+    document.getElementById('uiToggle').onclick = () => document.body.classList.toggle('hidden-ui');
+    document.getElementById('copyBtn').onclick = () => { navigator.clipboard.writeText(img.src); alert("Copied!"); };
+    document.getElementById('openBtn').onclick = () => window.open(img.src, '_blank');
 
-document.addEventListener('keydown',e=>{
-  if(e.key.toLowerCase()==='u') document.body.classList.toggle('hide-ui');
-  if(e.key==='a') instances.forEach(i=>i.back());
-  if(e.key==='d') instances.forEach(i=>i.forward());
-});
+    // Dragging
+    img.onmousedown = (e) => {
+      state.isDragging = true;
+      state.start = { x: e.clientX - state.transform.x, y: e.clientY - state.transform.y };
+    };
+    window.onmousemove = (e) => {
+      if (!state.isDragging) return;
+      state.transform.x = e.clientX - state.start.x;
+      state.transform.y = e.clientY - state.start.y;
+      requestAnimationFrame(updateStyle);
+    };
+    window.onmouseup = () => state.isDragging = false;
 
-createInstances(1);
+    // Zoom
+    window.onwheel = (e) => {
+      const delta = e.deltaY > 0 ? -0.1 : 0.1;
+      state.transform.scale = Math.min(Math.max(0.2, state.transform.scale + delta), 5);
+      updateStyle();
+    };
+
+    // Keys
+    document.onkeydown = (e) => {
+      if (document.activeElement.tagName === 'INPUT') return;
+      const key = e.key.toLowerCase();
+      if (key === 'd' || key === 'arrowright') nextImage();
+      if (key === 'a' || key === 'arrowleft') prevImage();
+      if (key === 'r') resetTransform();
+      if (key === 'f') { state.transform.flipped = !state.transform.flipped; updateStyle(); }
+    };
+  }
+
+  function updateButtonStates() {
+    document.getElementById('backBtn').disabled = state.history.length === 0;
+  }
+
+  init();
 </script>
 </body>
 </html>
