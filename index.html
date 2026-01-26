@@ -2,50 +2,102 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=yes">
+  <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
   <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
   <title>Ref Navigator Pro</title>
   <style>
-    :root { --bg: #0b0b0b; --ui-bg: rgba(20,20,20,0.9); --accent: #4a90e2; }
+    :root { 
+      --bg: #0b0b0b; 
+      --ui-bg: rgba(20,20,20,0.95); 
+      --accent: #4a90e2; 
+    }
     body {
       margin: 0; padding: 0; background: var(--bg); color: #fff;
-      font-family: system-ui, -apple-system, sans-serif;
-      height: 100vh; overflow: hidden; user-select: none;
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+      height: 100vh; overflow: hidden; user-select: none; -webkit-user-select: none;
     }
 
-    .viewport { width: 100vw; height: 100vh; display: flex; align-items: center; justify-content: center; overflow: hidden; }
+    /* Container for the image - handles the space */
+    .viewport {
+      width: 100vw; height: 100vh; 
+      display: flex; align-items: center; justify-content: center; 
+      overflow: hidden;
+      touch-action: none; /* Disables browser scrolling/zooming gestures */
+    }
+
     #mainImage { 
-      max-width: 100%; max-height: 100%; object-fit: contain; 
-      will-change: transform; transition: transform 0.1s ease-out;
+      max-width: 100%; max-height: 100%; 
+      object-fit: contain; 
+      will-change: transform; 
+      /* transform transition is handled in JS for dragging, css for zooming */
+      cursor: grab;
+    }
+    #mainImage:active { cursor: grabbing; }
+
+    /* UI Layers */
+    .panel { position: fixed; z-index: 100; display: flex; gap: 8px; pointer-events: none; transition: opacity 0.2s; }
+    .panel > * { pointer-events: auto; }
+    
+    .top-bar { top: 10px; left: 10px; right: 10px; flex-direction: column; gap: 10px; }
+    .search-row { display: flex; gap: 10px; width: 100%; }
+    .search-input { 
+      flex-grow: 1; background: #000; border: 1px solid #444; color: #fff; 
+      padding: 8px 15px; border-radius: 20px; outline: none; font-size: 14px;
     }
 
-    .panel { position: fixed; z-index: 100; display: flex; gap: 8px; pointer-events: none; }
-    .panel > * { pointer-events: auto; }
-    .top-bar { top: 10px; left: 10px; right: 10px; justify-content: space-between; }
-    .bottom-bar { bottom: 20px; left: 50%; transform: translateX(-50%); }
-    .side-nav { top: 50%; width: 100%; transform: translateY(-50%); justify-content: space-between; padding: 0 15px; box-sizing: border-box; }
-
-    .tag-grid { display: grid; grid-template-columns: repeat(7, 1fr); gap: 4px; background: var(--ui-bg); padding: 8px; border-radius: 12px; }
-    .tag-grid label { width: 32px; height: 32px; display: flex; align-items: center; justify-content: center; border-radius: 6px; background: #333; cursor: pointer; font-size: 0.8em; }
-    .tag-grid input:checked + span { color: var(--accent); font-weight: bold; }
+    .tag-grid { 
+      display: grid; grid-template-columns: repeat(7, 1fr); gap: 5px; 
+      background: var(--ui-bg); padding: 8px; border-radius: 12px; 
+      width: 100%; box-sizing: border-box;
+    }
+    .tag-grid label { 
+      aspect-ratio: 1; display: flex; align-items: center; justify-content: center; 
+      border-radius: 6px; background: #333; cursor: pointer; font-size: 0.8em; 
+      transition: background 0.2s;
+    }
+    .tag-grid input:checked + span { color: var(--accent); font-weight: 800; }
     .tag-grid input { display: none; }
 
-    button { background: var(--ui-bg); border: none; color: #fff; padding: 12px 20px; border-radius: 8px; cursor: pointer; font-size: 1.2em; }
-    button:disabled { opacity: 0.2; }
+    .side-nav { 
+      top: 50%; width: 100%; transform: translateY(-50%); 
+      justify-content: space-between; padding: 0 15px; box-sizing: border-box; 
+    }
 
-    .hidden-ui .panel { display: none !important; }
-    #loadingIndicator { position: fixed; top: 50%; left: 50%; transform: translate(-50%, -50%); display: none; pointer-events: none; }
+    .bottom-bar { bottom: 20px; left: 50%; transform: translateX(-50%); }
+
+    button { 
+      background: var(--ui-bg); border: 1px solid #333; color: #fff; 
+      padding: 12px 20px; border-radius: 8px; cursor: pointer; 
+      font-size: 1.2em; backdrop-filter: blur(4px); 
+      box-shadow: 0 4px 6px rgba(0,0,0,0.3);
+    }
+    button:active { transform: translateY(1px); }
+    button:disabled { opacity: 0.3; cursor: default; transform: none; }
+
+    /* Utilities */
+    .hidden-ui .panel { opacity: 0; pointer-events: none !important; }
+    #loadingIndicator { 
+      position: fixed; top: 50%; left: 50%; transform: translate(-50%, -50%); 
+      background: rgba(0,0,0,0.7); padding: 10px 20px; border-radius: 20px;
+      font-size: 0.9em; letter-spacing: 1px; display: none; pointer-events: none;
+    }
   </style>
 </head>
 <body>
 
 <div class="panel top-bar">
-  <input type="text" id="searchInput" style="border-radius:20px; padding:5px 15px; border:1px solid #444; background:#000; color:#fff" placeholder="Search tags...">
+  <div class="search-row">
+    <input type="text" id="searchInput" class="search-input" placeholder="Search tags...">
+  </div>
   <div id="categoryGrid" class="tag-grid"></div>
 </div>
 
-<div class="viewport"><img id="mainImage" draggable="false" /></div>
-<div id="loadingIndicator">Loading...</div>
+<div class="viewport">
+  <img id="mainImage" draggable="false" />
+</div>
+
+<div id="loadingIndicator">LOADING</div>
 
 <div class="panel side-nav">
   <button id="backBtn">←</button>
@@ -59,155 +111,276 @@
 </div>
 
 <script>
+  // Configuration
   const baseURL = 'https://f003.backblazeb2.com/file/linksref2/';
+  const HISTORY_LIMIT = 5;
+  const PRELOAD_LIMIT = 8;
   const categories = [
     {v:"People",l:"P"},{v:"pplus",l:"p"},{v:"Anime",l:"A"},{v:"angle",l:"a"},{v:"Figure",l:"F"},{v:"Style",l:"S"},
     {v:"XMaleAnatomy",l:"X"},{v:"Emotions",l:"E"},{v:"Background",l:"B"},{v:"Walk",l:"W"},{v:"screencap",l:"s"},{v:"Manga",l:"M"},
     {v:"moeManga",l:"m"},{v:"TestPanel",l:"T"}
   ];
 
+  // Application State
   const state = {
-    sources: {},
-    backStack: [],    // History
-    forwardStack: [], // Future (when navigating back)
-    preloadQueue: [], // The 8-image buffer
+    sources: {},        // Loaded text files
+    backStack: [],      // URLs we have visited (max 5)
+    forwardStack: [],   // URLs we came from when pressing Back (max 5)
+    preloadQueue: [],   // Random URLs buffered for the future
+    currentUrl: null,
+    
+    // Visual State
     transform: { x: 0, y: 0, scale: 1, flipped: false },
     isDragging: false,
     start: { x: 0, y: 0 }
   };
 
-  const img = document.getElementById('mainImage');
-  const catGrid = document.getElementById('categoryGrid');
+  // DOM Elements
+  const els = {
+    img: document.getElementById('mainImage'),
+    grid: document.getElementById('categoryGrid'),
+    search: document.getElementById('searchInput'),
+    loader: document.getElementById('loadingIndicator'),
+    btns: {
+      fwd: document.getElementById('forwardBtn'),
+      back: document.getElementById('backBtn'),
+      reset: document.getElementById('resetBtn'),
+      flip: document.getElementById('flipBtn'),
+      copy: document.getElementById('copyBtn')
+    }
+  };
 
-  /** 1. System Setup **/
+  // --- 1. Initialization ---
   function init() {
+    // Generate Checkboxes
     categories.forEach(cat => {
       const label = document.createElement('label');
       label.innerHTML = `<input type="checkbox" value="${cat.v}"><span>${cat.l}</span>`;
-      catGrid.appendChild(label);
+      els.grid.appendChild(label);
     });
+
+    // Default Selection
+    const firstCheck = els.grid.querySelector('input');
+    if(firstCheck) firstCheck.checked = true;
+
+    // Load Data
+    updateLibrary().then(() => navigateForward(true));
     bindEvents();
-    catGrid.querySelector('input').checked = true;
-    updateLibrary();
   }
 
-  /** 2. Fetching & Preloading **/
+  // --- 2. Data & Networking ---
   async function updateLibrary() {
-    const active = [...catGrid.querySelectorAll('input:checked')].map(i => i.value);
-    for (const val of active) {
-      if (!state.sources[val]) {
+    const activeInputs = [...els.grid.querySelectorAll('input:checked')];
+    const promises = activeInputs.map(async (input) => {
+      const cat = input.value;
+      if (!state.sources[cat]) {
         try {
-          const res = await fetch(`${baseURL}${val}.txt`);
+          const res = await fetch(`${baseURL}${cat}.txt`);
+          if(!res.ok) throw new Error('404');
           const text = await res.text();
-          state.sources[val] = text.split('\n').filter(l => l.trim().length > 5);
-        } catch (e) { console.error(e); }
+          state.sources[cat] = text.split('\n').filter(l => l.trim().length > 5);
+        } catch (e) { 
+          console.warn(`Failed to load ${cat}`); 
+          state.sources[cat] = []; 
+        }
+      }
+    });
+
+    await Promise.all(promises);
+    refillPreloadQueue();
+  }
+
+  function getActivePool() {
+    const activeKeys = [...els.grid.querySelectorAll('input:checked')].map(i => i.value);
+    const query = els.search.value.toLowerCase().trim();
+    let pool = [];
+    
+    activeKeys.forEach(k => {
+      if (state.sources[k]) pool.push(...state.sources[k]);
+    });
+
+    if (query) {
+      const tags = query.split('#').filter(t => t);
+      if(tags.length) {
+         // Simple tag matching
+         pool = pool.filter(url => tags.some(tag => url.toLowerCase().includes(tag)));
+      } else {
+         pool = pool.filter(url => url.toLowerCase().includes(query));
       }
     }
-    fillPreloadQueue();
-    if (!img.src) navigateForward();
+    return pool;
   }
 
-  function fillPreloadQueue() {
-    const activeKeys = [...catGrid.querySelectorAll('input:checked')].map(i => i.value);
-    const query = document.getElementById('searchInput').value.toLowerCase();
-    
-    let pool = [];
-    activeKeys.forEach(k => { if (state.sources[k]) pool.push(...state.sources[k]); });
-    if (query) pool = pool.filter(url => url.toLowerCase().includes(query));
+  function refillPreloadQueue() {
+    const pool = getActivePool();
+    if (pool.length === 0) return;
 
-    while (state.preloadQueue.length < 8 && pool.length > 0) {
+    while (state.preloadQueue.length < PRELOAD_LIMIT) {
       const url = pool[Math.floor(Math.random() * pool.length)];
-      const pImg = new Image();
-      pImg.src = url; // Trigger browser cache
+      // Simple Browser Cache Preload
+      const img = new Image();
+      img.src = url;
       state.preloadQueue.push(url);
     }
+    updateButtonStates();
   }
 
-  /** 3. Navigation Core **/
-  function navigateForward() {
+  // --- 3. Navigation Engine ---
+  function navigateForward(isInitial = false) {
+    let nextUrl = null;
+
+    // 1. Check if we have history to go forward to
     if (state.forwardStack.length > 0) {
-      // Browsing forward through existing history
-      if (img.src) state.backStack.push(img.src);
-      displayImage(state.forwardStack.shift());
-    } else if (state.preloadQueue.length > 0) {
-      // Moving to a brand new image
-      if (img.src) state.backStack.push(img.src);
-      if (state.backStack.length > 5) state.backStack.shift();
-      
-      displayImage(state.preloadQueue.shift());
-      fillPreloadQueue();
+      if (state.currentUrl) {
+        state.backStack.push(state.currentUrl);
+        if (state.backStack.length > HISTORY_LIMIT) state.backStack.shift();
+      }
+      nextUrl = state.forwardStack.shift(); // Take from forward history
+    } 
+    // 2. Otherwise generate new from queue
+    else if (state.preloadQueue.length > 0) {
+      if (state.currentUrl && !isInitial) {
+        state.backStack.push(state.currentUrl);
+        if (state.backStack.length > HISTORY_LIMIT) state.backStack.shift();
+      }
+      nextUrl = state.preloadQueue.shift();
+      refillPreloadQueue(); // Keep buffer full
     }
-    updateUI();
+
+    if (nextUrl) {
+      loadImage(nextUrl);
+    } else if (!isInitial) {
+      // Fallback if queue empty (e.g. strict search)
+      const pool = getActivePool();
+      if(pool.length) loadImage(pool[Math.floor(Math.random() * pool.length)]);
+    }
   }
 
   function navigateBackward() {
-    if (state.backStack.length > 0) {
-      if (img.src) state.forwardStack.unshift(img.src);
-      if (state.forwardStack.length > 5) state.forwardStack.pop();
-      
-      displayImage(state.backStack.pop());
+    if (state.backStack.length === 0) return;
+
+    if (state.currentUrl) {
+      state.forwardStack.unshift(state.currentUrl);
+      if (state.forwardStack.length > HISTORY_LIMIT) state.forwardStack.pop();
     }
-    updateUI();
+
+    const prevUrl = state.backStack.pop();
+    loadImage(prevUrl);
   }
 
-  function displayImage(url) {
-    img.src = url;
-    resetTransform();
+  function loadImage(url) {
+    state.currentUrl = url;
+    els.loader.style.display = 'block';
+    els.img.style.opacity = '0.5';
+
+    const tempImg = new Image();
+    
+    tempImg.onload = () => {
+      els.img.src = url;
+      els.img.style.opacity = '1';
+      els.loader.style.display = 'none';
+      resetTransform();
+      updateButtonStates();
+    };
+
+    // Auto-skip broken links
+    tempImg.onerror = () => {
+      console.log('Image failed, skipping:', url);
+      // Remove failed url from any stacks to prevent loops
+      navigateForward(); 
+    };
+
+    tempImg.src = url;
   }
 
-  /** 4. Controls & Hotkeys **/
-  function updateTransform() {
+  // --- 4. Transform & Interaction ---
+  function updateStyle() {
     const { x, y, scale, flipped } = state.transform;
-    img.style.transform = `translate(${x}px, ${y}px) scale(${scale * (flipped ? -1 : 1)}, ${scale})`;
+    els.img.style.transform = `translate(${x}px, ${y}px) scale(${scale * (flipped ? -1 : 1)}, ${scale})`;
   }
 
   function resetTransform() {
     state.transform = { x: 0, y: 0, scale: 1, flipped: false };
-    updateTransform();
+    updateStyle();
   }
 
+  // Unified Drag Handler
+  function handleDragStart(x, y) {
+    state.isDragging = true;
+    state.start = { x: x - state.transform.x, y: y - state.transform.y };
+    els.img.style.cursor = 'grabbing';
+  }
+  function handleDragMove(x, y) {
+    if (!state.isDragging) return;
+    state.transform.x = x - state.start.x;
+    state.transform.y = y - state.start.y;
+    requestAnimationFrame(updateStyle);
+  }
+  function handleDragEnd() {
+    state.isDragging = false;
+    els.img.style.cursor = 'grab';
+  }
+
+  // --- 5. Event Binding ---
   function bindEvents() {
-    document.getElementById('forwardBtn').onclick = navigateForward;
-    document.getElementById('backBtn').onclick = navigateBackward;
-    document.getElementById('resetBtn').onclick = resetTransform;
-    document.getElementById('flipBtn').onclick = () => { state.transform.flipped = !state.transform.flipped; updateTransform(); };
-    catGrid.onchange = () => { state.preloadQueue = []; updateLibrary(); };
+    // Click Listeners
+    els.btns.fwd.addEventListener('click', () => navigateForward());
+    els.btns.back.addEventListener('click', navigateBackward);
+    els.btns.reset.addEventListener('click', resetTransform);
+    els.btns.flip.addEventListener('click', () => { state.transform.flipped = !state.transform.flipped; updateStyle(); });
+    els.btns.copy.addEventListener('click', () => { if(state.currentUrl) navigator.clipboard.writeText(state.currentUrl); });
+    
+    els.grid.addEventListener('change', () => { 
+      state.preloadQueue = []; // Clear queue on category change
+      updateLibrary(); 
+    });
+    
+    els.search.addEventListener('input', () => {
+      state.preloadQueue = [];
+      refillPreloadQueue();
+    });
 
-    // Keyboard
-    document.onkeydown = (e) => {
-      if (e.target.tagName === 'INPUT') return;
-      const key = e.key.toLowerCase();
-      
-      if (key === 'd') navigateForward();
-      if (key === 'a') navigateBackward();
-      if (key === 'w') { state.transform.scale += 0.2; updateTransform(); }
-      if (key === 's') { state.transform.scale = Math.max(0.1, state.transform.scale - 0.2); updateTransform(); }
-      if (key === 'u') document.body.classList.toggle('hidden-ui');
-      if (key === 'r') resetTransform();
-      if (key === 'f') { state.transform.flipped = !state.transform.flipped; updateTransform(); }
-    };
+    // Mouse Drag
+    els.img.addEventListener('mousedown', e => { e.preventDefault(); handleDragStart(e.clientX, e.clientY); });
+    window.addEventListener('mousemove', e => handleDragMove(e.clientX, e.clientY));
+    window.addEventListener('mouseup', handleDragEnd);
 
-    // Dragging Logic
-    img.onmousedown = (e) => {
-      state.isDragging = true;
-      state.start = { x: e.clientX - state.transform.x, y: e.clientY - state.transform.y };
-      img.style.cursor = 'grabbing';
-    };
-    window.onmousemove = (e) => {
-      if (!state.isDragging) return;
-      state.transform.x = e.clientX - state.start.x;
-      state.transform.y = e.clientY - state.start.y;
-      updateTransform();
-    };
-    window.onmouseup = () => { state.isDragging = false; img.style.cursor = 'grab'; };
+    // Touch Drag (Mobile)
+    els.img.addEventListener('touchstart', e => { 
+      // e.preventDefault(); // Optional: uncomment if page scrolls
+      if(e.touches.length === 1) handleDragStart(e.touches[0].clientX, e.touches[0].clientY);
+    }, {passive: false});
+    
+    window.addEventListener('touchmove', e => {
+      if(state.isDragging && e.touches.length === 1) handleDragMove(e.touches[0].clientX, e.touches[0].clientY);
+    }, {passive: false});
+    
+    window.addEventListener('touchend', handleDragEnd);
+
+    // Keyboard Shortcuts
+    document.addEventListener('keydown', (e) => {
+      if (document.activeElement === els.search) return;
+      const k = e.key.toLowerCase();
+
+      if (k === 'd' || k === 'arrowright') navigateForward();
+      if (k === 'a' || k === 'arrowleft') navigateBackward();
+      if (k === 'w') { state.transform.scale += 0.2; updateStyle(); }
+      if (k === 's') { state.transform.scale = Math.max(0.1, state.transform.scale - 0.2); updateStyle(); }
+      if (k === 'u') document.body.classList.toggle('hidden-ui');
+      if (k === 'r') resetTransform();
+      if (k === 'f') { state.transform.flipped = !state.transform.flipped; updateStyle(); }
+    });
   }
 
-  function updateUI() {
-    document.getElementById('backBtn').disabled = state.backStack.length === 0;
-    document.getElementById('forwardBtn').disabled = (state.forwardStack.length === 0 && state.preloadQueue.length === 0);
+  function updateButtonStates() {
+    els.btns.back.disabled = state.backStack.length === 0;
+    // Disable forward only if no history AND no queue AND no potential search results
+    els.btns.fwd.disabled = (state.forwardStack.length === 0 && state.preloadQueue.length === 0);
   }
 
+  // Start
   init();
+
 </script>
 </body>
 </html>
