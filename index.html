@@ -3,119 +3,55 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
-  <meta name="apple-mobile-web-app-capable" content="yes">
-  <title>Ref Navigator Balanced</title>
+  <title>Ref Navigator - Ultra-Fast Mode</title>
   <style>
-    :root { --bg: #000000; --ui-bg: rgba(20,20,20,0.95); --accent: #4a90e2; }
+    :root { --bg: #000; --ui-bg: rgba(25,25,25,0.9); --accent: #4a90e2; }
+    body { margin: 0; background: var(--bg); color: #fff; font-family: system-ui, sans-serif; height: 100vh; overflow: hidden; user-select: none; }
     
-    body {
-      margin: 0; padding: 0; background: var(--bg); color: #fff;
-      font-family: system-ui, sans-serif;
-      height: 100vh; width: 100vw; overflow: hidden;
-      user-select: none; -webkit-user-select: none;
-    }
-
-    .viewport {
-      position: absolute; top: 0; left: 0;
-      width: 100vw; height: 100vh;
-      display: flex; align-items: center; justify-content: center;
-      touch-action: none; z-index: 1;
-    }
-
-    #mainImage {
-      width: 100%; height: 100%;
-      object-fit: contain;
-      will-change: transform;
-      cursor: grab;
-      transition: opacity 0.2s;
-    }
+    .viewport { position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; touch-action: none; z-index: 1; }
+    #mainImage { width: 100%; height: 100%; object-fit: contain; will-change: transform; transition: opacity 0.2s; cursor: grab; }
     #mainImage:active { cursor: grabbing; }
 
-    .ui-layer { position: fixed; z-index: 100; display: flex; pointer-events: none; }
+    .ui-layer { position: fixed; z-index: 100; display: flex; pointer-events: none; transition: opacity 0.3s; }
     .ui-layer > * { pointer-events: auto; }
 
-    .top-center {
-      top: 10px; left: 50%; transform: translateX(-50%);
-      flex-direction: column; align-items: center; gap: 8px;
-      width: auto; max-width: 95vw;
-    }
-
-    .search-box {
-      background: var(--ui-bg); border: 1px solid #444; color: #fff;
-      padding: 6px 12px; border-radius: 20px; font-size: 14px;
-      width: 160px; text-align: center; outline: none;
-    }
-
-    .category-container {
-      display: flex; flex-wrap: wrap; justify-content: center; gap: 4px;
-      background: var(--ui-bg); padding: 5px; border-radius: 10px;
-      max-width: 100%;
-    }
-
-    .cat-btn {
-      width: 32px; height: 32px;
-      display: flex; align-items: center; justify-content: center;
-      background: #333; border-radius: 5px; cursor: pointer;
-      font-size: 13px; font-weight: bold; color: #aaa;
-    }
-    .cat-btn input { display: none; }
-    .cat-btn:has(input:checked) {
-      background: var(--accent); color: #fff;
-    }
-
-    .side-nav {
-      top: 50%; width: 100%; transform: translateY(-50%);
-      justify-content: space-between; padding: 0 10px; box-sizing: border-box;
-      pointer-events: none;
-    }
-    .nav-btn {
-      pointer-events: auto;
-      background: rgba(0,0,0,0.3); border: 1px solid rgba(255,255,255,0.1);
-      color: white; font-size: 24px; padding: 20px 12px;
-      border-radius: 8px; cursor: pointer;
-    }
-    .nav-btn:hover { background: rgba(50,50,50,0.8); }
-    .nav-btn:disabled { opacity: 0.1; cursor: default; }
-
-    .bottom-bar {
-      bottom: 20px; left: 50%; transform: translateX(-50%);
-      gap: 15px; background: var(--ui-bg); padding: 8px 15px; border-radius: 20px;
-    }
-    .tool-btn {
-      background: transparent; border: none; color: #ccc;
-      font-size: 18px; cursor: pointer; padding: 0 5px;
-    }
-    .tool-btn:hover { color: #fff; transform: scale(1.1); }
-
-    .hidden-ui .ui-layer { display: none !important; }
+    .top-bar { top: 15px; left: 50%; transform: translateX(-50%); flex-direction: column; align-items: center; gap: 10px; }
+    .category-container { display: flex; flex-wrap: wrap; justify-content: center; gap: 5px; background: var(--ui-bg); padding: 6px; border-radius: 12px; border: 1px solid #333; }
     
-    #loader {
-      position: fixed; top: 50%; left: 50%; transform: translate(-50%,-50%);
-      background: rgba(0,0,0,0.8); padding: 10px 20px; border-radius: 12px;
-      font-size: 14px; letter-spacing: 1px; pointer-events: none; display: none;
-      color: #fff; border: 1px solid #444;
-    }
-    .error-flash { color: #ff6b6b !important; border-color: #ff6b6b !important; }
+    .cat-btn { width: 34px; height: 34px; display: flex; align-items: center; justify-content: center; background: #333; border-radius: 6px; cursor: pointer; font-size: 14px; font-weight: bold; color: #888; }
+    .cat-btn input { display: none; }
+    .cat-btn:has(input:checked) { background: var(--accent); color: #fff; box-shadow: 0 0 10px rgba(74,144,226,0.3); }
+
+    .nav-layer { inset: 0; justify-content: space-between; align-items: center; padding: 0 20px; }
+    .nav-btn { background: rgba(0,0,0,0.3); border: 1px solid rgba(255,255,255,0.1); color: #fff; font-size: 30px; padding: 25px 15px; border-radius: 10px; cursor: pointer; backdrop-filter: blur(2px); }
+    .nav-btn:disabled { opacity: 0.1; }
+
+    .bottom-bar { bottom: 20px; left: 50%; transform: translateX(-50%); gap: 20px; background: var(--ui-bg); padding: 10px 25px; border-radius: 30px; border: 1px solid #333; }
+    .tool-btn { background: none; border: none; color: #aaa; font-size: 20px; cursor: pointer; transition: color 0.2s; }
+    .tool-btn:hover { color: #fff; }
+
+    #loader { position: fixed; top: 50%; left: 50%; transform: translate(-50%, -50%); background: var(--ui-bg); padding: 15px 30px; border-radius: 15px; border: 1px solid var(--accent); display: none; z-index: 1000; }
+    .hidden-ui { opacity: 0; pointer-events: none !important; }
   </style>
 </head>
 <body>
 
-<div class="ui-layer top-center">
-  <input type="text" id="searchInput" class="search-box" placeholder="Search #tag">
+<div class="ui-layer top-bar" id="ui-top">
   <div id="catWrapper" class="category-container"></div>
 </div>
 
 <div class="viewport">
   <img id="mainImage" draggable="false" />
 </div>
-<div id="loader">LOADING...</div>
 
-<div class="ui-layer side-nav">
+<div id="loader">SNIPING LINK...</div>
+
+<div class="ui-layer nav-layer" id="ui-nav">
   <button id="backBtn" class="nav-btn">❮</button>
   <button id="fwdBtn" class="nav-btn">❯</button>
 </div>
 
-<div class="ui-layer bottom-bar">
+<div class="ui-layer bottom-bar" id="ui-bottom">
   <button id="resetBtn" class="tool-btn">↻</button>
   <button id="flipBtn" class="tool-btn">↔</button>
   <button id="copyBtn" class="tool-btn">📋</button>
@@ -131,21 +67,18 @@
   ];
 
   const state = {
-    sources: {},
-    backStack: [],
-    forwardStack: [],
-    preloadQueue: [],
+    fileSizes: {},      // Cache for Range logic
+    backStack: [],      // Max 5
+    forwardStack: [],   // Max 5
     currentUrl: null,
     transform: { x:0, y:0, scale:1, flipped:false },
     isDragging: false,
-    dragStart: { x:0, y:0 },
-    loadingTimeout: null
+    dragStart: { x:0, y:0 }
   };
 
   const el = {
     img: document.getElementById('mainImage'),
     cats: document.getElementById('catWrapper'),
-    search: document.getElementById('searchInput'),
     loader: document.getElementById('loader'),
     btnBack: document.getElementById('backBtn'),
     btnFwd: document.getElementById('fwdBtn')
@@ -158,219 +91,137 @@
       label.innerHTML = `<input type="checkbox" value="${cat.v}">${cat.l}`;
       el.cats.appendChild(label);
     });
+    el.cats.querySelector('input').checked = true;
     
-    // Default select first
-    const first = el.cats.querySelector('input');
-    if(first) first.checked = true;
-
     bindControls();
-    fullRefresh(); 
+    navigateForward(true);
   }
 
-  async function fullRefresh() {
-    state.backStack = [];
-    state.forwardStack = [];
-    state.preloadQueue = [];
-    state.currentUrl = null;
-    updateNavButtons();
-    
-    await fetchSelectedSources();
-    navigateForward(true); 
+  // Gets file size without downloading content
+  async function getFileSize(cat) {
+    if (state.fileSizes[cat]) return state.fileSizes[cat];
+    const resp = await fetch(baseURL + cat + '.txt', { method: 'HEAD' });
+    const size = parseInt(resp.headers.get('content-length'));
+    state.fileSizes[cat] = size;
+    return size;
   }
 
-  async function fetchSelectedSources() {
+  // The "Sniper" - Grabs a random URL from a file of any size
+  async function sniperFetch() {
     const active = [...el.cats.querySelectorAll('input:checked')].map(i => i.value);
-    const jobs = active.map(async key => {
-      if(!state.sources[key]) {
-        try {
-          const r = await fetch(baseURL + key + '.txt');
-          if(!r.ok) throw new Error('404');
-          const txt = await r.text();
-          state.sources[key] = txt.split('\n').filter(x => x.trim().length > 5);
-        } catch(e) { state.sources[key] = []; }
-      }
-    });
-    await Promise.all(jobs);
-  }
-
-  // --- NEW: BALANCED SELECTION LOGIC ---
-  function getNextRandomUrl() {
-    const activeCats = [...el.cats.querySelectorAll('input:checked')].map(i => i.value);
-    const term = el.search.value.toLowerCase().trim();
-
-    // Strategy 1: Search is active (Must use pool method)
-    if (term) {
-      let pool = [];
-      activeCats.forEach(k => { if(state.sources[k]) pool.push(...state.sources[k]); });
-      
-      const tags = term.split('#').filter(Boolean);
-      if(tags.length) pool = pool.filter(u => tags.some(t => u.toLowerCase().includes(t)));
-      else pool = pool.filter(u => u.toLowerCase().includes(term));
-      
-      if(pool.length) return pool[Math.floor(Math.random() * pool.length)];
+    if (!active.length) return null;
+    
+    // Pick Category first (Equal chance)
+    const cat = active[Math.floor(Math.random() * active.length)];
+    const totalSize = await getFileSize(cat);
+    
+    // Jump to random byte
+    const randomPos = Math.floor(Math.random() * (totalSize - 3000));
+    
+    try {
+      const resp = await fetch(baseURL + cat + '.txt', {
+        headers: { 'Range': `bytes=${randomPos}-${randomPos + 2500}` }
+      });
+      const chunk = await resp.text();
+      const lines = chunk.split('\n');
+      // Discard first and last lines as they are likely partials
+      const validLines = lines.slice(1, -1).filter(l => l.length > 10);
+      return validLines[Math.floor(Math.random() * validLines.length)].trim();
+    } catch (e) {
+      console.error("Snipe failed", e);
       return null;
     }
-
-    // Strategy 2: No search (Use Balanced Category method)
-    // Filter to only categories that actually have loaded images
-    const validCats = activeCats.filter(k => state.sources[k] && state.sources[k].length > 0);
-    
-    if (validCats.length === 0) return null;
-
-    // 1. Pick a random Category (Equal Chance)
-    const randomCatKey = validCats[Math.floor(Math.random() * validCats.length)];
-    // 2. Pick a random Image from that Category
-    const catList = state.sources[randomCatKey];
-    return catList[Math.floor(Math.random() * catList.length)];
   }
 
-  function fillQueue() {
-    while(state.preloadQueue.length < 5) { // Reduced buffer to 5 to save bandwidth
-      const url = getNextRandomUrl();
-      if(!url) break;
-      // Preload image
-      const img = new Image();
-      img.src = url;
-      state.preloadQueue.push(url);
-    }
-    updateNavButtons();
-  }
-
-  function navigateForward(forceNew = false) {
-    let next = null;
-
-    if(!forceNew && state.forwardStack.length > 0) {
-      if(state.currentUrl) pushHistory(state.currentUrl);
-      next = state.forwardStack.shift();
-    }
-    else if(state.preloadQueue.length > 0) {
-      if(state.currentUrl) pushHistory(state.currentUrl);
-      next = state.preloadQueue.shift();
-      setTimeout(fillQueue, 100); // Refill in background
-    }
-    else {
-      // Direct fetch if queue empty
-      const fresh = getNextRandomUrl();
-      if(fresh) {
-        if(state.currentUrl) pushHistory(state.currentUrl);
-        next = fresh;
+  async function navigateForward(forceNew = false) {
+    if (!forceNew && state.forwardStack.length > 0) {
+      if (state.currentUrl) pushToStack(state.backStack, state.currentUrl);
+      displayImage(state.forwardStack.shift());
+    } else {
+      el.loader.style.display = 'block';
+      const next = await sniperFetch();
+      if (next) {
+        if (state.currentUrl) pushToStack(state.backStack, state.currentUrl);
+        displayImage(next);
       }
     }
-
-    if(next) showImage(next);
   }
 
   function navigateBack() {
-    if(state.backStack.length === 0) return;
-    if(state.currentUrl) {
-      state.forwardStack.unshift(state.currentUrl);
-      if(state.forwardStack.length > 10) state.forwardStack.pop();
-    }
-    const prev = state.backStack.pop();
-    showImage(prev);
+    if (!state.backStack.length) return;
+    if (state.currentUrl) pushToStack(state.forwardStack, state.currentUrl);
+    displayImage(state.backStack.pop());
   }
 
-  function pushHistory(url) {
-    state.backStack.push(url);
-    if(state.backStack.length > 10) state.backStack.shift();
+  function pushToStack(stack, url) {
+    stack.push(url);
+    if (stack.length > 5) stack.shift();
+    updateButtons();
   }
 
-  function showImage(url) {
-    // Clear previous timeout
-    if(state.loadingTimeout) clearTimeout(state.loadingTimeout);
-
+  function displayImage(url) {
     state.currentUrl = url;
-    el.loader.innerText = "LOADING";
-    el.loader.classList.remove('error-flash');
-    el.loader.style.display = 'block';
-    el.img.style.opacity = '0.3';
-
-    // --- NEW: TIMEOUT LOGIC ---
-    // If image takes > 3 seconds, kill it and move on
-    state.loadingTimeout = setTimeout(() => {
-        el.loader.innerText = "TIMEOUT (Skipping)";
-        el.loader.classList.add('error-flash');
-        console.log("Image timed out:", url);
-        setTimeout(() => navigateForward(true), 500); // Wait 0.5s then skip
-    }, 3000);
-
-    const i = new Image();
-    i.onload = () => {
-      clearTimeout(state.loadingTimeout); // Success! Stop the timer
+    el.img.style.opacity = '0.2';
+    const temp = new Image();
+    temp.onload = () => {
       el.img.src = url;
       el.img.style.opacity = '1';
       el.loader.style.display = 'none';
       resetTransform();
-      updateNavButtons();
+      updateButtons();
     };
-    i.onerror = () => {
-      clearTimeout(state.loadingTimeout);
-      console.log('Dead link');
-      navigateForward(true);
-    };
-    i.src = url;
+    temp.onerror = () => navigateForward(true);
+    temp.src = url;
   }
 
-  function updateNavButtons() {
-    el.btnBack.disabled = (state.backStack.length === 0);
-    // Only disable forward if literally nothing is available
-    const hasSources = [...el.cats.querySelectorAll('input:checked')].some(k => state.sources[k] && state.sources[k].length > 0);
-    el.btnFwd.disabled = (!hasSources && state.forwardStack.length === 0);
+  function updateButtons() {
+    el.btnBack.disabled = state.backStack.length === 0;
   }
 
+  // Transforms
   function applyTransform() {
     const {x, y, scale, flipped} = state.transform;
-    const f = flipped ? -1 : 1;
-    el.img.style.transform = `translate(${x}px, ${y}px) scale(${scale*f}, ${scale})`;
+    el.img.style.transform = `translate(${x}px, ${y}px) scale(${scale * (flipped ? -1 : 1)}, ${scale})`;
   }
+
   function resetTransform() {
-    state.transform = {x:0, y:0, scale:1, flipped:false};
+    state.transform = { x:0, y:0, scale:1, flipped:false };
     applyTransform();
   }
 
   function bindControls() {
-    el.cats.addEventListener('change', fullRefresh);
-    el.search.addEventListener('input', () => { state.preloadQueue = []; fillQueue(); });
-
     el.btnFwd.onclick = () => navigateForward();
     el.btnBack.onclick = navigateBack;
     document.getElementById('resetBtn').onclick = resetTransform;
     document.getElementById('flipBtn').onclick = () => { state.transform.flipped = !state.transform.flipped; applyTransform(); };
-    document.getElementById('uiBtn').onclick = () => document.body.classList.toggle('hidden-ui');
+    document.getElementById('uiBtn').onclick = () => {
+      document.getElementById('ui-top').classList.toggle('hidden-ui');
+      document.getElementById('ui-nav').classList.toggle('hidden-ui');
+      document.getElementById('ui-bottom').classList.toggle('hidden-ui');
+    };
     document.getElementById('copyBtn').onclick = () => { if(state.currentUrl) navigator.clipboard.writeText(state.currentUrl); };
 
-    document.addEventListener('keydown', e => {
-      if(document.activeElement === el.search) return;
+    // Keys: W(zoom in), S(zoom out), A(back), D(fwd), U(UI)
+    document.onkeydown = (e) => {
       const k = e.key.toLowerCase();
-      if(k==='d' || k==='arrowright') navigateForward();
-      if(k==='a' || k==='arrowleft') navigateBack();
-      if(k==='w') { state.transform.scale+=0.1; applyTransform(); }
-      if(k==='s') { state.transform.scale=Math.max(0.1, state.transform.scale-0.1); applyTransform(); }
-      if(k==='r') resetTransform();
-      if(k==='f') { state.transform.flipped = !state.transform.flipped; applyTransform(); }
-      if(k==='u') document.body.classList.toggle('hidden-ui');
-    });
-
-    const startDrag = (x,y) => {
-      state.isDragging = true;
-      state.dragStart = { x: x - state.transform.x, y: y - state.transform.y };
-      el.img.style.cursor = 'grabbing';
+      if (k === 'd') navigateForward();
+      if (k === 'a') navigateBack();
+      if (k === 'w') { state.transform.scale += 0.15; applyTransform(); }
+      if (k === 's') { state.transform.scale = Math.max(0.1, state.transform.scale - 0.15); applyTransform(); }
+      if (k === 'u') document.getElementById('uiBtn').click();
+      if (k === 'f') document.getElementById('flipBtn').click();
+      if (k === 'r') resetTransform();
     };
-    const doDrag = (x,y) => {
-      if(!state.isDragging) return;
-      state.transform.x = x - state.dragStart.x;
-      state.transform.y = y - state.dragStart.y;
-      requestAnimationFrame(applyTransform);
-    };
-    const endDrag = () => { state.isDragging = false; el.img.style.cursor = 'grab'; };
 
-    el.img.addEventListener('mousedown', e => { e.preventDefault(); startDrag(e.clientX, e.clientY); });
-    window.addEventListener('mousemove', e => doDrag(e.clientX, e.clientY));
-    window.addEventListener('mouseup', endDrag);
-    
-    el.img.addEventListener('touchstart', e => { if(e.touches.length===1) startDrag(e.touches[0].clientX, e.touches[0].clientY); }, {passive:false});
-    window.addEventListener('touchmove', e => { if(e.touches.length===1) doDrag(e.touches[0].clientX, e.touches[0].clientY); }, {passive:false});
-    window.addEventListener('touchend', endDrag);
+    // Dragging
+    const start = (x, y) => { state.isDragging = true; state.dragStart = { x: x - state.transform.x, y: y - state.transform.y }; };
+    const move = (x, y) => { if (state.isDragging) { state.transform.x = x - state.dragStart.x; state.transform.y = y - state.dragStart.y; applyTransform(); } };
+    el.img.onmousedown = e => start(e.clientX, e.clientY);
+    window.onmousemove = e => move(e.clientX, e.clientY);
+    window.onmouseup = () => state.isDragging = false;
+    el.img.ontouchstart = e => start(e.touches[0].clientX, e.touches[0].clientY);
+    window.ontouchmove = e => move(e.touches[0].clientX, e.touches[0].clientY);
+    window.ontouchend = () => state.isDragging = false;
   }
 
   init();
