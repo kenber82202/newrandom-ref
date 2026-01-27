@@ -3,12 +3,11 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
-  <title>Ref Navigator - Ultra Pro</title>
+  <title>Ref Navigator - Filtered Pro</title>
   <style>
     :root { --bg: #000; --ui-bg: rgba(20,20,20,0.95); --accent: #4a90e2; }
     body { margin: 0; background: var(--bg); color: #fff; font-family: system-ui, sans-serif; height: 100vh; width: 100vw; overflow: hidden; }
     
-    /* Viewport forces image to use all space */
     .viewport { position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; z-index: 1; overflow: hidden; }
     #mainImage { width: 100vw; height: 100vh; object-fit: contain; will-change: transform; transition: opacity 0.2s; cursor: grab; }
     
@@ -29,7 +28,7 @@
     .bottom-bar { bottom: 20px; left: 50%; transform: translateX(-50%); gap: 15px; background: var(--ui-bg); padding: 8px 20px; border-radius: 20px; border: 1px solid #333; }
     .tool-btn { background: none; border: none; color: #aaa; font-size: 18px; cursor: pointer; }
     
-    #loader { position: fixed; top: 50%; left: 50%; transform: translate(-50%, -50%); background: var(--ui-bg); padding: 12px 24px; border-radius: 10px; border: 1px solid var(--accent); display: none; z-index: 1000; font-size: 12px; letter-spacing: 1px; }
+    #loader { position: fixed; top: 50%; left: 50%; transform: translate(-50%, -50%); background: var(--ui-bg); padding: 12px 24px; border-radius: 10px; border: 1px solid var(--accent); display: none; z-index: 1000; font-size: 12px; letter-spacing: 1px; text-align: center;}
     .hidden-ui .ui-layer { display: none !important; }
   </style>
 </head>
@@ -67,12 +66,13 @@
 
   const state = {
     fileSizes: {},
-    history: [],      // Pure linear history [A, B, C]
-    index: -1,        // Where we are in the history
-    prefetched: null, // The "Sniped" link waiting for the next click
+    history: [],
+    index: -1,
+    prefetched: null,
     transform: { x:0, y:0, scale:1, flipped:false },
     isDragging: false,
-    dragStart: { x:0, y:0 }
+    dragStart: { x:0, y:0 },
+    minSize: 250 // Filter out images smaller than this
   };
 
   const el = {
@@ -93,60 +93,94 @@
     el.cats.querySelector('input').checked = true;
     
     bindControls();
-    navigateForward(); // Start first load
+    navigateForward();
   }
 
-  // SNIPER LOGIC: Grab a random link from a huge file
   async function getFileSize(cat) {
     if (state.fileSizes[cat]) return state.fileSizes[cat];
-    const resp = await fetch(baseURL + cat + '.txt', { method: 'HEAD' });
-    const size = parseInt(resp.headers.get('content-length'));
-    state.fileSizes[cat] = size;
-    return size;
+    try {
+      const resp = await fetch(baseURL + cat + '.txt', { method: 'HEAD' });
+      const size = parseInt(resp.headers.get('content-length'));
+      state.fileSizes[cat] = size;
+      return size;
+    } catch(e) { return 100000; }
   }
 
-  async function sniperFetch() {
+  // SNIPER: Includes Retry Logic & Anti-Hang Timeout
+  async function sniperFetch(retryCount = 0) {
+    if (retryCount > 5) return null; // Give up after 5 tries
+
     const active = [...el.cats.querySelectorAll('input:checked')].map(i => i.value);
     if (!active.length) return null;
+    
     const cat = active[Math.floor(Math.random() * active.length)];
     const totalSize = await getFileSize(cat);
     const randomPos = Math.floor(Math.random() * (totalSize - 3000));
     
+    // Create a controller to kill the fetch if it hangs
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), 2000);
+
     try {
       const resp = await fetch(baseURL + cat + '.txt', {
-        headers: { 'Range': `bytes=${randomPos}-${randomPos + 2500}` }
+        headers: { 'Range': `bytes=${randomPos}-${randomPos + 2500}` },
+        signal: controller.signal
       });
+      clearTimeout(timeout);
+      
       const chunk = await resp.text();
       const lines = chunk.split('\n');
       const validLines = lines.slice(1, -1).filter(l => l.length > 10);
+      
+      if (validLines.length === 0) return sniperFetch(retryCount + 1);
+
       const url = validLines[Math.floor(Math.random() * validLines.length)].trim();
       
-      // Hidden Preload: Tell the browser to start fetching the actual image bytes
-      const imgPre = new Image();
-      imgPre.src = url;
-      
+      // Check image size before validating it for prefetch
+      const isGood = await validateImageSize(url);
+      if (!isGood) return sniperFetch(retryCount + 1);
+
       return url;
-    } catch (e) { return null; }
+    } catch (e) {
+      return sniperFetch(retryCount + 1);
+    }
   }
 
-  // NAVIGATION: The "Multiverse" Pointer Logic
+  // SIZE FILTER: Checks dimensions naturalWidth/Height
+  function validateImageSize(url) {
+    return new Promise((resolve) => {
+      const img = new Image();
+      img.onload = () => {
+        const isBigEnough = img.naturalWidth >= state.minSize && img.naturalHeight >= state.minSize;
+        resolve(isBigEnough);
+      };
+      img.onerror = () => resolve(false);
+      img.src = url;
+    });
+  }
+
   async function navigateForward() {
-    // 1. If we are browsing back in history, just move the pointer forward
     if (state.index < state.history.length - 1) {
       state.index++;
       displayImage(state.history[state.index]);
       return;
     }
 
-    // 2. Otherwise, we need a new image. Use prefetched or fetch now.
     el.loader.style.display = 'block';
+    el.loader.innerText = "SNIPING...";
+    
     let url = state.prefetched;
+    state.prefetched = null; // Use it and clear it
+
     if (!url) url = await sniperFetch();
     
     if (url) {
       state.history.push(url);
       state.index = state.history.length - 1;
       displayImage(url);
+    } else {
+      el.loader.innerText = "FAILED TO SNIPE. RETRYING...";
+      setTimeout(navigateForward, 500);
     }
   }
 
@@ -159,6 +193,9 @@
 
   function displayImage(url) {
     el.img.style.opacity = '0.3';
+    el.loader.style.display = 'block';
+    el.loader.innerText = "LOADING IMAGE...";
+    
     const temp = new Image();
     temp.onload = () => {
       el.img.src = url;
@@ -166,12 +203,9 @@
       el.loader.style.display = 'none';
       resetTransform();
       updateButtons();
-      
-      // PRE-SNIPE NEXT: Now that this one is loaded, get the next one ready
-      prepareNext();
+      prepareNext(); // Pre-snipe for the next click
     };
     temp.onerror = () => {
-      // If a link in history is dead, skip it
       state.history.splice(state.index, 1);
       state.index--;
       navigateForward();
@@ -181,14 +215,12 @@
 
   async function prepareNext() {
     state.prefetched = await sniperFetch();
-    console.log("Pre-sniped next link ready.");
   }
 
   function updateButtons() {
     el.btnBack.disabled = state.index <= 0;
   }
 
-  // TRANSFORMS & TOOLS
   function applyTransform() {
     const {x, y, scale, flipped} = state.transform;
     el.img.style.transform = `translate(${x}px, ${y}px) scale(${scale * (flipped ? -1 : 1)}, ${scale})`;
@@ -200,14 +232,15 @@
   }
 
   function bindControls() {
-    el.btnFwd.onclick = () => navigateForward();
+    el.btnFwd.onclick = navigateForward;
     el.btnBack.onclick = navigateBack;
     document.getElementById('resetBtn').onclick = resetTransform;
     document.getElementById('flipBtn').onclick = () => { state.transform.flipped = !state.transform.flipped; applyTransform(); };
     document.getElementById('uiBtn').onclick = () => document.body.classList.toggle('hidden-ui');
-    document.getElementById('copyBtn').onclick = () => { if(state.history[state.index]) navigator.clipboard.writeText(state.history[state.index]); };
+    document.getElementById('copyBtn').onclick = () => { 
+      if(state.history[state.index]) navigator.clipboard.writeText(state.history[state.index]); 
+    };
 
-    // Reset history when categories change
     el.cats.onchange = () => {
       state.history = [];
       state.index = -1;
@@ -226,7 +259,6 @@
       if (k === 'u') document.body.classList.toggle('hidden-ui');
     };
 
-    // Drag Logic
     const start = (x, y) => { state.isDragging = true; state.dragStart = { x: x - state.transform.x, y: y - state.transform.y }; };
     const move = (x, y) => { if (state.isDragging) { state.transform.x = x - state.dragStart.x; state.transform.y = y - state.dragStart.y; applyTransform(); } };
     el.img.onmousedown = e => start(e.clientX, e.clientY);
