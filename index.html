@@ -3,40 +3,39 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
-  <title>Ref Navigator - Ultra-Fast Mode</title>
+  <title>Ref Navigator - Ultra Pro</title>
   <style>
-    :root { --bg: #000; --ui-bg: rgba(25,25,25,0.9); --accent: #4a90e2; }
-    body { margin: 0; background: var(--bg); color: #fff; font-family: system-ui, sans-serif; height: 100vh; overflow: hidden; user-select: none; }
+    :root { --bg: #000; --ui-bg: rgba(20,20,20,0.95); --accent: #4a90e2; }
+    body { margin: 0; background: var(--bg); color: #fff; font-family: system-ui, sans-serif; height: 100vh; width: 100vw; overflow: hidden; }
     
-    .viewport { position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; touch-action: none; z-index: 1; }
-    #mainImage { width: 100%; height: 100%; object-fit: contain; will-change: transform; transition: opacity 0.2s; cursor: grab; }
-    #mainImage:active { cursor: grabbing; }
-
-    .ui-layer { position: fixed; z-index: 100; display: flex; pointer-events: none; transition: opacity 0.3s; }
+    /* Viewport forces image to use all space */
+    .viewport { position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; z-index: 1; overflow: hidden; }
+    #mainImage { width: 100vw; height: 100vh; object-fit: contain; will-change: transform; transition: opacity 0.2s; cursor: grab; }
+    
+    .ui-layer { position: fixed; z-index: 100; display: flex; pointer-events: none; transition: opacity 0.2s; }
     .ui-layer > * { pointer-events: auto; }
 
-    .top-bar { top: 15px; left: 50%; transform: translateX(-50%); flex-direction: column; align-items: center; gap: 10px; }
-    .category-container { display: flex; flex-wrap: wrap; justify-content: center; gap: 5px; background: var(--ui-bg); padding: 6px; border-radius: 12px; border: 1px solid #333; }
+    .top-bar { top: 10px; left: 50%; transform: translateX(-50%); flex-direction: column; align-items: center; gap: 8px; width: auto; }
+    .category-container { display: flex; flex-wrap: wrap; justify-content: center; gap: 4px; background: var(--ui-bg); padding: 5px; border-radius: 10px; border: 1px solid #333; }
     
-    .cat-btn { width: 34px; height: 34px; display: flex; align-items: center; justify-content: center; background: #333; border-radius: 6px; cursor: pointer; font-size: 14px; font-weight: bold; color: #888; }
+    .cat-btn { width: 30px; height: 30px; display: flex; align-items: center; justify-content: center; background: #333; border-radius: 5px; cursor: pointer; font-size: 12px; font-weight: bold; color: #888; }
     .cat-btn input { display: none; }
-    .cat-btn:has(input:checked) { background: var(--accent); color: #fff; box-shadow: 0 0 10px rgba(74,144,226,0.3); }
+    .cat-btn:has(input:checked) { background: var(--accent); color: #fff; }
 
-    .nav-layer { inset: 0; justify-content: space-between; align-items: center; padding: 0 20px; }
-    .nav-btn { background: rgba(0,0,0,0.3); border: 1px solid rgba(255,255,255,0.1); color: #fff; font-size: 30px; padding: 25px 15px; border-radius: 10px; cursor: pointer; backdrop-filter: blur(2px); }
-    .nav-btn:disabled { opacity: 0.1; }
+    .nav-layer { inset: 0; justify-content: space-between; align-items: center; padding: 0 10px; }
+    .nav-btn { background: rgba(0,0,0,0.2); border: 1px solid rgba(255,255,255,0.05); color: #fff; font-size: 24px; padding: 25px 12px; border-radius: 8px; cursor: pointer; }
+    .nav-btn:disabled { opacity: 0; pointer-events: none; }
 
-    .bottom-bar { bottom: 20px; left: 50%; transform: translateX(-50%); gap: 20px; background: var(--ui-bg); padding: 10px 25px; border-radius: 30px; border: 1px solid #333; }
-    .tool-btn { background: none; border: none; color: #aaa; font-size: 20px; cursor: pointer; transition: color 0.2s; }
-    .tool-btn:hover { color: #fff; }
-
-    #loader { position: fixed; top: 50%; left: 50%; transform: translate(-50%, -50%); background: var(--ui-bg); padding: 15px 30px; border-radius: 15px; border: 1px solid var(--accent); display: none; z-index: 1000; }
-    .hidden-ui { opacity: 0; pointer-events: none !important; }
+    .bottom-bar { bottom: 20px; left: 50%; transform: translateX(-50%); gap: 15px; background: var(--ui-bg); padding: 8px 20px; border-radius: 20px; border: 1px solid #333; }
+    .tool-btn { background: none; border: none; color: #aaa; font-size: 18px; cursor: pointer; }
+    
+    #loader { position: fixed; top: 50%; left: 50%; transform: translate(-50%, -50%); background: var(--ui-bg); padding: 12px 24px; border-radius: 10px; border: 1px solid var(--accent); display: none; z-index: 1000; font-size: 12px; letter-spacing: 1px; }
+    .hidden-ui .ui-layer { display: none !important; }
   </style>
 </head>
 <body>
 
-<div class="ui-layer top-bar" id="ui-top">
+<div class="ui-layer top-bar">
   <div id="catWrapper" class="category-container"></div>
 </div>
 
@@ -44,14 +43,14 @@
   <img id="mainImage" draggable="false" />
 </div>
 
-<div id="loader">SNIPING LINK...</div>
+<div id="loader">SNIPING...</div>
 
-<div class="ui-layer nav-layer" id="ui-nav">
+<div class="ui-layer nav-layer">
   <button id="backBtn" class="nav-btn">❮</button>
   <button id="fwdBtn" class="nav-btn">❯</button>
 </div>
 
-<div class="ui-layer bottom-bar" id="ui-bottom">
+<div class="ui-layer bottom-bar">
   <button id="resetBtn" class="tool-btn">↻</button>
   <button id="flipBtn" class="tool-btn">↔</button>
   <button id="copyBtn" class="tool-btn">📋</button>
@@ -67,10 +66,10 @@
   ];
 
   const state = {
-    fileSizes: {},      // Cache for Range logic
-    backStack: [],      // Max 5
-    forwardStack: [],   // Max 5
-    currentUrl: null,
+    fileSizes: {},
+    history: [],      // Pure linear history [A, B, C]
+    index: -1,        // Where we are in the history
+    prefetched: null, // The "Sniped" link waiting for the next click
     transform: { x:0, y:0, scale:1, flipped:false },
     isDragging: false,
     dragStart: { x:0, y:0 }
@@ -94,10 +93,10 @@
     el.cats.querySelector('input').checked = true;
     
     bindControls();
-    navigateForward(true);
+    navigateForward(); // Start first load
   }
 
-  // Gets file size without downloading content
+  // SNIPER LOGIC: Grab a random link from a huge file
   async function getFileSize(cat) {
     if (state.fileSizes[cat]) return state.fileSizes[cat];
     const resp = await fetch(baseURL + cat + '.txt', { method: 'HEAD' });
@@ -106,16 +105,11 @@
     return size;
   }
 
-  // The "Sniper" - Grabs a random URL from a file of any size
   async function sniperFetch() {
     const active = [...el.cats.querySelectorAll('input:checked')].map(i => i.value);
     if (!active.length) return null;
-    
-    // Pick Category first (Equal chance)
     const cat = active[Math.floor(Math.random() * active.length)];
     const totalSize = await getFileSize(cat);
-    
-    // Jump to random byte
     const randomPos = Math.floor(Math.random() * (totalSize - 3000));
     
     try {
@@ -124,44 +118,47 @@
       });
       const chunk = await resp.text();
       const lines = chunk.split('\n');
-      // Discard first and last lines as they are likely partials
       const validLines = lines.slice(1, -1).filter(l => l.length > 10);
-      return validLines[Math.floor(Math.random() * validLines.length)].trim();
-    } catch (e) {
-      console.error("Snipe failed", e);
-      return null;
-    }
+      const url = validLines[Math.floor(Math.random() * validLines.length)].trim();
+      
+      // Hidden Preload: Tell the browser to start fetching the actual image bytes
+      const imgPre = new Image();
+      imgPre.src = url;
+      
+      return url;
+    } catch (e) { return null; }
   }
 
-  async function navigateForward(forceNew = false) {
-    if (!forceNew && state.forwardStack.length > 0) {
-      if (state.currentUrl) pushToStack(state.backStack, state.currentUrl);
-      displayImage(state.forwardStack.shift());
-    } else {
-      el.loader.style.display = 'block';
-      const next = await sniperFetch();
-      if (next) {
-        if (state.currentUrl) pushToStack(state.backStack, state.currentUrl);
-        displayImage(next);
-      }
+  // NAVIGATION: The "Multiverse" Pointer Logic
+  async function navigateForward() {
+    // 1. If we are browsing back in history, just move the pointer forward
+    if (state.index < state.history.length - 1) {
+      state.index++;
+      displayImage(state.history[state.index]);
+      return;
+    }
+
+    // 2. Otherwise, we need a new image. Use prefetched or fetch now.
+    el.loader.style.display = 'block';
+    let url = state.prefetched;
+    if (!url) url = await sniperFetch();
+    
+    if (url) {
+      state.history.push(url);
+      state.index = state.history.length - 1;
+      displayImage(url);
     }
   }
 
   function navigateBack() {
-    if (!state.backStack.length) return;
-    if (state.currentUrl) pushToStack(state.forwardStack, state.currentUrl);
-    displayImage(state.backStack.pop());
-  }
-
-  function pushToStack(stack, url) {
-    stack.push(url);
-    if (stack.length > 5) stack.shift();
-    updateButtons();
+    if (state.index > 0) {
+      state.index--;
+      displayImage(state.history[state.index]);
+    }
   }
 
   function displayImage(url) {
-    state.currentUrl = url;
-    el.img.style.opacity = '0.2';
+    el.img.style.opacity = '0.3';
     const temp = new Image();
     temp.onload = () => {
       el.img.src = url;
@@ -169,16 +166,29 @@
       el.loader.style.display = 'none';
       resetTransform();
       updateButtons();
+      
+      // PRE-SNIPE NEXT: Now that this one is loaded, get the next one ready
+      prepareNext();
     };
-    temp.onerror = () => navigateForward(true);
+    temp.onerror = () => {
+      // If a link in history is dead, skip it
+      state.history.splice(state.index, 1);
+      state.index--;
+      navigateForward();
+    };
     temp.src = url;
   }
 
-  function updateButtons() {
-    el.btnBack.disabled = state.backStack.length === 0;
+  async function prepareNext() {
+    state.prefetched = await sniperFetch();
+    console.log("Pre-sniped next link ready.");
   }
 
-  // Transforms
+  function updateButtons() {
+    el.btnBack.disabled = state.index <= 0;
+  }
+
+  // TRANSFORMS & TOOLS
   function applyTransform() {
     const {x, y, scale, flipped} = state.transform;
     el.img.style.transform = `translate(${x}px, ${y}px) scale(${scale * (flipped ? -1 : 1)}, ${scale})`;
@@ -194,33 +204,35 @@
     el.btnBack.onclick = navigateBack;
     document.getElementById('resetBtn').onclick = resetTransform;
     document.getElementById('flipBtn').onclick = () => { state.transform.flipped = !state.transform.flipped; applyTransform(); };
-    document.getElementById('uiBtn').onclick = () => {
-      document.getElementById('ui-top').classList.toggle('hidden-ui');
-      document.getElementById('ui-nav').classList.toggle('hidden-ui');
-      document.getElementById('ui-bottom').classList.toggle('hidden-ui');
-    };
-    document.getElementById('copyBtn').onclick = () => { if(state.currentUrl) navigator.clipboard.writeText(state.currentUrl); };
+    document.getElementById('uiBtn').onclick = () => document.body.classList.toggle('hidden-ui');
+    document.getElementById('copyBtn').onclick = () => { if(state.history[state.index]) navigator.clipboard.writeText(state.history[state.index]); };
 
-    // Keys: W(zoom in), S(zoom out), A(back), D(fwd), U(UI)
+    // Reset history when categories change
+    el.cats.onchange = () => {
+      state.history = [];
+      state.index = -1;
+      state.prefetched = null;
+      navigateForward();
+    };
+
     document.onkeydown = (e) => {
       const k = e.key.toLowerCase();
-      if (k === 'd') navigateForward();
-      if (k === 'a') navigateBack();
-      if (k === 'w') { state.transform.scale += 0.15; applyTransform(); }
-      if (k === 's') { state.transform.scale = Math.max(0.1, state.transform.scale - 0.15); applyTransform(); }
-      if (k === 'u') document.getElementById('uiBtn').click();
+      if (k === 'd' || k === 'arrowright') navigateForward();
+      if (k === 'a' || k === 'arrowleft') navigateBack();
+      if (k === 'w') { state.transform.scale += 0.2; applyTransform(); }
+      if (k === 's') { state.transform.scale = Math.max(0.1, state.transform.scale - 0.2); applyTransform(); }
       if (k === 'f') document.getElementById('flipBtn').click();
       if (k === 'r') resetTransform();
+      if (k === 'u') document.body.classList.toggle('hidden-ui');
     };
 
-    // Dragging
+    // Drag Logic
     const start = (x, y) => { state.isDragging = true; state.dragStart = { x: x - state.transform.x, y: y - state.transform.y }; };
     const move = (x, y) => { if (state.isDragging) { state.transform.x = x - state.dragStart.x; state.transform.y = y - state.dragStart.y; applyTransform(); } };
     el.img.onmousedown = e => start(e.clientX, e.clientY);
     window.onmousemove = e => move(e.clientX, e.clientY);
     window.onmouseup = () => state.isDragging = false;
     el.img.ontouchstart = e => start(e.touches[0].clientX, e.touches[0].clientY);
-    window.ontouchmove = e => move(e.touches[0].clientX, e.touches[0].clientY);
     window.ontouchend = () => state.isDragging = false;
   }
 
