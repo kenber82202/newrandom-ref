@@ -5,10 +5,9 @@
   <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
   <title>Ref Navigator - Multi-Mode</title>
   <style>
-    :root { --bg: #000; --ui-bg: rgba(20,20,20,0.95); --accent: #4a90e2; --focus-color: #ff9800; }
+    :root { --bg: #000; --ui-bg: rgba(20,20,20,0.95); --accent: #4a90e2; }
     body { margin: 0; background: var(--bg); color: #fff; font-family: system-ui, sans-serif; height: 100vh; width: 100vw; overflow: hidden; display: flex; }
     
-    /* Layout Logic */
     .instance { position: relative; flex: 1; height: 100vh; border-right: 1px solid #333; overflow: hidden; display: flex; flex-direction: column; transition: all 0.3s ease; }
     .instance.hidden { display: none; }
     .instance:last-child { border-right: none; }
@@ -16,7 +15,6 @@
     .viewport { flex: 1; display: flex; align-items: center; justify-content: center; overflow: hidden; position: relative; background: #050505; }
     .mainImage { max-width: 100%; max-height: 100%; object-fit: contain; will-change: transform; transition: opacity 0.2s; cursor: grab; }
     
-    /* UI Layers */
     .ui-layer { position: absolute; z-index: 100; pointer-events: none; width: 100%; height: 100%; }
     .ui-layer > * { pointer-events: auto; }
 
@@ -29,45 +27,39 @@
 
     .loader { position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); background: var(--ui-bg); padding: 12px 24px; border-radius: 10px; border: 1px solid var(--accent); display: none; z-index: 1000; font-size: 12px; pointer-events: none; }
 
-    /* Controls Bar */
     .bottom-bar { position: fixed; bottom: 20px; left: 50%; transform: translateX(-50%); display: flex; gap: 15px; background: var(--ui-bg); padding: 8px 20px; border-radius: 20px; border: 1px solid #333; z-index: 1000; }
     .tool-btn { background: none; border: none; color: #aaa; font-size: 18px; cursor: pointer; transition: 0.2s; }
     .tool-btn.active { color: var(--accent); }
 
-    /* Focus Toggle - High Visibility */
+    /* Solo Mode Toggles - Only show in Dual Mode */
     .focus-toggle { 
         position: absolute; 
         top: 15px; 
         right: 15px; 
-        background: #333; 
-        color: #fff; 
-        width: 36px; 
-        height: 36px; 
-        display: flex; 
+        background: #222; 
+        color: #666; 
+        width: 26px; 
+        height: 26px; 
+        display: none; /* Hidden by default */
         align-items: center; 
         justify-content: center; 
         cursor: pointer; 
-        border: 2px solid transparent; 
-        border-radius: 8px; 
-        font-size: 18px;
-        box-shadow: 0 4px 10px rgba(0,0,0,0.5);
+        border: 1px solid #444; 
+        border-radius: 4px; 
+        font-size: 14px;
     }
-    .focus-toggle.active { 
-        background: var(--focus-color); 
-        border-color: #fff;
-    }
+    body.dual-active .focus-toggle { display: flex; }
+    .focus-toggle.active { color: var(--accent); border-color: var(--accent); background: #000; }
 
     .hidden-ui .ui-layer, .hidden-ui .bottom-bar { display: none !important; }
   </style>
 </head>
-<body class="single-mode">
+<body>
 
 <div class="instance" id="inst1">
     <div class="ui-layer">
-        <div class="top-bar">
-            <div class="category-container cat-wrapper"></div>
-        </div>
-        <div class="focus-toggle active" title="Hotkey Focus (Orange = ON)">🎯</div>
+        <div class="top-bar"><div class="category-container cat-wrapper"></div></div>
+        <div class="focus-toggle" title="Solo Hotkey Mode">🎯</div>
     </div>
     <div class="viewport">
         <img class="mainImage" draggable="false" />
@@ -77,10 +69,8 @@
 
 <div class="instance hidden" id="inst2">
     <div class="ui-layer">
-        <div class="top-bar">
-            <div class="category-container cat-wrapper"></div>
-        </div>
-        <div class="focus-toggle active" title="Hotkey Focus (Orange = ON)">🎯</div>
+        <div class="top-bar"><div class="category-container cat-wrapper"></div></div>
+        <div class="focus-toggle" title="Solo Hotkey Mode">🎯</div>
     </div>
     <div class="viewport">
         <img class="mainImage" draggable="false" />
@@ -89,9 +79,9 @@
 </div>
 
 <div class="bottom-bar">
-    <button id="toggleDual" class="tool-btn" title="Toggle Dual Mode">👥</button>
-    <button id="resetAll" class="tool-btn" title="Reset Transforms">↻</button>
-    <button id="uiBtn" class="tool-btn" title="Toggle UI">👁</button>
+    <button id="toggleDual" class="tool-btn">👥</button>
+    <button id="resetAll" class="tool-btn">↻</button>
+    <button id="uiBtn" class="tool-btn">👁</button>
 </div>
 
 <script>
@@ -102,6 +92,8 @@
     {v:"moeManga",l:"m"},{v:"TestPanel",l:"T"}
   ];
 
+  let soloInstance = null; // Tracks if a single instance is being targeted
+
   class RefInstance {
     constructor(containerId, defaultCatIndex) {
       this.container = document.getElementById(containerId);
@@ -109,16 +101,12 @@
       this.catWrapper = this.container.querySelector('.cat-wrapper');
       this.loader = this.container.querySelector('.loader');
       this.focusBtn = this.container.querySelector('.focus-toggle');
+      this.id = containerId;
       
       this.state = {
-        history: [],
-        index: -1,
-        prefetched: null,
+        history: [], index: -1, prefetched: null,
         transform: { x:0, y:0, scale:1, flipped:false },
-        isDragging: false,
-        dragStart: { x:0, y:0 },
-        minSize: 250,
-        hotkeysEnabled: true
+        isDragging: false, dragStart: { x:0, y:0 }, minSize: 250
       };
 
       this.init(defaultCatIndex);
@@ -133,14 +121,17 @@
       });
 
       this.focusBtn.onclick = () => {
-        this.state.hotkeysEnabled = !this.state.hotkeysEnabled;
-        this.focusBtn.classList.toggle('active', this.state.hotkeysEnabled);
+        if (soloInstance === this) {
+          soloInstance = null; // Toggle off
+        } else {
+          soloInstance = this; // Toggle on for this one
+        }
+        updateFocusUI();
       };
 
       this.bindMouse();
       this.catWrapper.onchange = () => {
-        this.state.history = [];
-        this.state.index = -1;
+        this.state.history = []; this.state.index = -1;
         this.navigateForward();
       };
     }
@@ -156,19 +147,14 @@
       if (retry > 5) return null;
       const active = [...this.catWrapper.querySelectorAll('input:checked')].map(i => i.value);
       if (!active.length) return null;
-      
       const cat = active[Math.floor(Math.random() * active.length)];
       const totalSize = await this.getFileSize(cat);
       const randomPos = Math.floor(Math.random() * (totalSize - 3000));
-      
       try {
-        const resp = await fetch(baseURL + cat + '.txt', {
-          headers: { 'Range': `bytes=${randomPos}-${randomPos + 2500}` }
-        });
+        const resp = await fetch(baseURL + cat + '.txt', { headers: { 'Range': `bytes=${randomPos}-${randomPos + 2500}` } });
         const chunk = await resp.text();
         const validLines = chunk.split('\n').slice(1, -1).filter(l => l.length > 10);
         if (!validLines.length) return this.sniperFetch(retry + 1);
-
         const url = validLines[Math.floor(Math.random() * validLines.length)].trim();
         const isGood = await this.validateSize(url);
         return isGood ? url : this.sniperFetch(retry + 1);
@@ -187,23 +173,19 @@
     async navigateForward() {
       this.loader.style.display = 'block';
       if (this.state.index < this.state.history.length - 1) {
-        this.state.index++;
-        this.displayImage(this.state.history[this.state.index]);
-        return;
+        this.state.index++; this.displayImage(this.state.history[this.state.index]); return;
       }
       let url = this.state.prefetched || await this.sniperFetch();
       this.state.prefetched = null;
       if (url) {
-        this.state.history.push(url);
-        this.state.index = this.state.history.length - 1;
+        this.state.history.push(url); this.state.index = this.state.history.length - 1;
         this.displayImage(url);
       }
     }
 
     navigateBack() {
       if (this.state.index > 0) {
-        this.state.index--;
-        this.displayImage(this.state.history[this.state.index]);
+        this.state.index--; this.displayImage(this.state.history[this.state.index]);
       }
     }
 
@@ -212,26 +194,19 @@
       this.loader.style.display = 'block';
       const temp = new Image();
       temp.onload = () => {
-        this.img.src = url;
-        this.img.style.opacity = '1';
+        this.img.src = url; this.img.style.opacity = '1';
         this.loader.style.display = 'none';
-        this.resetTransform();
-        this.prepareNext();
+        this.resetTransform(); this.prepareNext();
       };
       temp.src = url;
     }
 
     async prepareNext() { this.state.prefetched = await this.sniperFetch(); }
-
     applyTransform() {
       const {x, y, scale, flipped} = this.state.transform;
       this.img.style.transform = `translate(${x}px, ${y}px) scale(${scale * (flipped ? -1 : 1)}, ${scale})`;
     }
-
-    resetTransform() {
-      this.state.transform = { x:0, y:0, scale:1, flipped:false };
-      this.applyTransform();
-    }
+    resetTransform() { this.state.transform = { x:0, y:0, scale:1, flipped:false }; this.applyTransform(); }
 
     bindMouse() {
       const start = (x, y) => { this.state.isDragging = true; this.state.dragStart = { x: x - this.state.transform.x, y: y - this.state.transform.y }; };
@@ -242,33 +217,37 @@
     }
   }
 
-  // Init
   const instances = [ new RefInstance('inst1', 0), new RefInstance('inst2', 2) ];
   instances[0].navigateForward();
 
-  // Mode Toggling
+  function updateFocusUI() {
+    instances.forEach(i => i.focusBtn.classList.toggle('active', soloInstance === i));
+  }
+
   const dualBtn = document.getElementById('toggleDual');
   let isDual = false;
 
   dualBtn.onclick = () => {
     isDual = !isDual;
     dualBtn.classList.toggle('active', isDual);
+    document.body.classList.toggle('dual-active', isDual);
     document.getElementById('inst2').classList.toggle('hidden', !isDual);
-    if (isDual && instances[1].state.index === -1) {
-        instances[1].navigateForward();
-    }
+    if (!isDual) soloInstance = null; // Reset solo mode if going back to single
+    if (isDual && instances[1].state.index === -1) instances[1].navigateForward();
+    updateFocusUI();
   };
 
-  // Global UI buttons
   document.getElementById('resetAll').onclick = () => instances.forEach(i => i.resetTransform());
   document.getElementById('uiBtn').onclick = () => document.body.classList.toggle('hidden-ui');
 
-  // Unified Hotkeys
   document.onkeydown = (e) => {
     const k = e.key.toLowerCase();
     instances.forEach((inst, idx) => {
         const isVisible = idx === 0 || isDual;
-        if (isVisible && inst.state.hotkeysEnabled) {
+        // Hotkey logic: Only run if visible AND (no solo instance exists OR this is the solo instance)
+        const canControl = isVisible && (soloInstance === null || soloInstance === inst);
+        
+        if (canControl) {
             if (k === 'd' || k === 'arrowright') inst.navigateForward();
             if (k === 'a' || k === 'arrowleft') inst.navigateBack();
             if (k === 'w') { inst.state.transform.scale += 0.2; inst.applyTransform(); }
