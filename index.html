@@ -51,6 +51,11 @@
     body.dual-active .focus-toggle { display: flex; }
     .focus-toggle.active { color: var(--accent); border-color: var(--accent); background: #000; }
 
+    .nav-btn { position: absolute; top: 50%; transform: translateY(-50%); background: rgba(0,0,0,0.5); color: #fff; width: 40px; height: 60px; display: flex; align-items: center; justify-content: center; font-size: 24px; cursor: pointer; border-radius: 8px; user-select: none; transition: 0.2s; pointer-events: auto; }
+    .nav-btn:hover { background: var(--accent); }
+    .prev-btn { left: 10px; }
+    .next-btn { right: 10px; }
+
     .hidden-ui .ui-layer, .hidden-ui .bottom-bar { display: none !important; }
   </style>
 </head>
@@ -60,6 +65,8 @@
     <div class="ui-layer">
         <div class="top-bar"><div class="category-container cat-wrapper"></div></div>
         <div class="focus-toggle" title="Solo Hotkey Mode">🎯</div>
+        <div class="nav-btn prev-btn">&lt;</div>
+        <div class="nav-btn next-btn">&gt;</div>
     </div>
     <div class="viewport">
         <img class="mainImage" draggable="false" />
@@ -71,6 +78,8 @@
     <div class="ui-layer">
         <div class="top-bar"><div class="category-container cat-wrapper"></div></div>
         <div class="focus-toggle" title="Solo Hotkey Mode">🎯</div>
+        <div class="nav-btn prev-btn">&lt;</div>
+        <div class="nav-btn next-btn">&gt;</div>
     </div>
     <div class="viewport">
         <img class="mainImage" draggable="false" />
@@ -101,6 +110,8 @@
       this.catWrapper = this.container.querySelector('.cat-wrapper');
       this.loader = this.container.querySelector('.loader');
       this.focusBtn = this.container.querySelector('.focus-toggle');
+      this.prevBtn = this.container.querySelector('.prev-btn');
+      this.nextBtn = this.container.querySelector('.next-btn');
       this.id = containerId;
       
       this.state = {
@@ -108,6 +119,9 @@
         transform: { x:0, y:0, scale:1, flipped:false },
         isDragging: false, dragStart: { x:0, y:0 }, minSize: 250
       };
+
+      this.touchStartX = 0;
+      this.touchEndX = 0;
 
       this.init(defaultCatIndex);
     }
@@ -129,11 +143,29 @@
         updateFocusUI();
       };
 
+      this.prevBtn.onclick = () => this.navigateBack();
+      this.nextBtn.onclick = () => this.navigateForward();
+
+      this.container.addEventListener('touchstart', e => {
+        this.touchStartX = e.changedTouches[0].screenX;
+      }, {passive: true});
+
+      this.container.addEventListener('touchend', e => {
+        this.touchEndX = e.changedTouches[0].screenX;
+        this.handleSwipe();
+      }, {passive: true});
+
       this.bindMouse();
       this.catWrapper.onchange = () => {
         this.state.history = []; this.state.index = -1;
         this.navigateForward();
       };
+    }
+
+    handleSwipe() {
+      const swipeThreshold = 50;
+      if (this.touchEndX < this.touchStartX - swipeThreshold) this.navigateForward(); // Swipe left
+      if (this.touchEndX > this.touchStartX + swipeThreshold) this.navigateBack();    // Swipe right
     }
 
     async getFileSize(cat) {
