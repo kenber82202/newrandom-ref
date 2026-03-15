@@ -6,14 +6,16 @@
   <title>Ref Navigator - Multi-Mode</title>
   <style>
     :root { --bg: #000; --ui-bg: rgba(20,20,20,0.95); --accent: #4a90e2; }
-    body { margin: 0; background: var(--bg); color: #fff; font-family: system-ui, sans-serif; height: 100vh; width: 100vw; overflow: hidden; display: flex; }
-    
-    .instance { position: relative; flex: 1; height: 100vh; border-right: 1px solid #333; overflow: hidden; display: flex; flex-direction: column; transition: all 0.3s ease; }
+    body { margin: 0; background: var(--bg); color: #fff; font-family: system-ui, sans-serif; height: 100vh; width: 100vw; overflow: hidden; display: flex; flex-direction: row; }
+    body.layout-vertical { flex-direction: column; }
+
+    .instance { position: relative; flex: 1; border-right: 1px solid #333; overflow: hidden; display: flex; flex-direction: column; transition: none; }
+    body.layout-vertical .instance { border-right: none; border-bottom: 1px solid #333; }
     .instance.hidden { display: none; }
-    .instance:last-child { border-right: none; }
+    .instance:last-child { border-right: none; border-bottom: none; }
 
     .viewport { flex: 1; display: flex; align-items: center; justify-content: center; overflow: hidden; position: relative; background: #050505; }
-    .mainImage { max-width: 100%; max-height: 100%; object-fit: contain; will-change: transform; transition: opacity 0.2s; cursor: grab; }
+    .mainImage { width: 100%; height: 100%; object-fit: fill; will-change: transform; transition: opacity 0.2s; cursor: grab; display: block; }
     
     .ui-layer { position: absolute; z-index: 100; pointer-events: none; width: 100%; height: 100%; }
     .ui-layer > * { pointer-events: auto; }
@@ -27,11 +29,61 @@
 
     .loader { position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); background: var(--ui-bg); padding: 12px 24px; border-radius: 10px; border: 1px solid var(--accent); display: none; z-index: 1000; font-size: 12px; pointer-events: none; }
 
-    .bottom-bar { position: fixed; bottom: 20px; left: 50%; transform: translateX(-50%); display: flex; gap: 15px; background: var(--ui-bg); padding: 8px 20px; border-radius: 20px; border: 1px solid #333; z-index: 1000; }
+    .bottom-bar { position: fixed; bottom: 20px; left: 50%; transform: translateX(-50%); display: flex; gap: 15px; align-items: center; background: var(--ui-bg); padding: 8px 20px; border-radius: 20px; border: 1px solid #333; z-index: 1000; }
     .tool-btn { background: none; border: none; color: #aaa; font-size: 18px; cursor: pointer; transition: 0.2s; }
     .tool-btn.active { color: var(--accent); }
 
-    /* Solo Mode Toggles - Only show in Dual Mode */
+    /* Dual mode split controls */
+    #splitControls {
+      display: none;
+      align-items: center;
+      gap: 8px;
+    }
+    body.dual-active #splitControls { display: flex; }
+
+    #splitSlider {
+      -webkit-appearance: none;
+      appearance: none;
+      width: 90px;
+      height: 4px;
+      background: #444;
+      border-radius: 2px;
+      outline: none;
+      cursor: pointer;
+    }
+    #splitSlider::-webkit-slider-thumb {
+      -webkit-appearance: none;
+      appearance: none;
+      width: 14px;
+      height: 14px;
+      border-radius: 50%;
+      background: var(--accent);
+      cursor: pointer;
+    }
+    #splitSlider::-moz-range-thumb {
+      width: 14px;
+      height: 14px;
+      border-radius: 50%;
+      background: var(--accent);
+      cursor: pointer;
+      border: none;
+    }
+
+    /* Divider / resizer handle */
+    #divider {
+      display: none;
+      background: #222;
+      z-index: 200;
+      flex-shrink: 0;
+      cursor: col-resize;
+      transition: background 0.2s;
+    }
+    #divider:hover, #divider.dragging { background: var(--accent); }
+    body.dual-active #divider { display: block; }
+    body.layout-horizontal #divider { width: 5px; height: 100vh; cursor: col-resize; }
+    body.layout-vertical #divider { height: 5px; width: 100vw; cursor: row-resize; }
+
+    /* Focus toggles */
     .focus-toggle { 
         position: absolute; 
         top: 15px; 
@@ -40,7 +92,7 @@
         color: #666; 
         width: 26px; 
         height: 26px; 
-        display: none; /* Hidden by default */
+        display: none;
         align-items: center; 
         justify-content: center; 
         cursor: pointer; 
@@ -59,7 +111,7 @@
     .hidden-ui .ui-layer, .hidden-ui .bottom-bar { display: none !important; }
   </style>
 </head>
-<body>
+<body class="layout-horizontal">
 
 <div class="instance" id="inst1">
     <div class="ui-layer">
@@ -73,6 +125,8 @@
         <div class="loader">SNIPING...</div>
     </div>
 </div>
+
+<div id="divider"></div>
 
 <div class="instance hidden" id="inst2">
     <div class="ui-layer">
@@ -89,6 +143,10 @@
 
 <div class="bottom-bar">
     <button id="toggleDual" class="tool-btn">👥</button>
+    <div id="splitControls">
+      <input type="range" id="splitSlider" min="10" max="90" value="50" title="Adjust split ratio">
+      <button id="toggleLayout" class="tool-btn" title="Toggle horizontal/vertical split">↕</button>
+    </div>
     <button id="resetAll" class="tool-btn">↻</button>
     <button id="uiBtn" class="tool-btn">👁</button>
 </div>
@@ -101,7 +159,7 @@
     {v:"moeManga",l:"m"},{v:"TestPanel",l:"T"}
   ];
 
-  let soloInstance = null; // Tracks if a single instance is being targeted
+  let soloInstance = null;
 
   class RefInstance {
     constructor(containerId, defaultCatIndex) {
@@ -117,7 +175,7 @@
       this.state = {
         history: [], index: -1, prefetched: null,
         transform: { x:0, y:0, scale:1, flipped:false },
-        isDragging: false, dragStart: { x:0, y:0 }, minSize: 250
+        isDragging: false, dragStart: { x:0, y:0 }, minSize: 350
       };
 
       this.touchStartX = 0;
@@ -136,9 +194,9 @@
 
       this.focusBtn.onclick = () => {
         if (soloInstance === this) {
-          soloInstance = null; // Toggle off
+          soloInstance = null;
         } else {
-          soloInstance = this; // Toggle on for this one
+          soloInstance = this;
         }
         updateFocusUI();
       };
@@ -164,8 +222,8 @@
 
     handleSwipe() {
       const swipeThreshold = 50;
-      if (this.touchEndX < this.touchStartX - swipeThreshold) this.navigateForward(); // Swipe left
-      if (this.touchEndX > this.touchStartX + swipeThreshold) this.navigateBack();    // Swipe right
+      if (this.touchEndX < this.touchStartX - swipeThreshold) this.navigateForward();
+      if (this.touchEndX > this.touchStartX + swipeThreshold) this.navigateBack();
     }
 
     async getFileSize(cat) {
@@ -196,7 +254,7 @@
     validateSize(url) {
       return new Promise(res => {
         const i = new Image();
-        i.onload = () => res(i.naturalWidth >= this.state.minSize);
+        i.onload = () => res(i.naturalWidth >= this.state.minSize && i.naturalHeight >= this.state.minSize);
         i.onerror = () => res(false);
         i.src = url;
       });
@@ -256,6 +314,66 @@
     instances.forEach(i => i.focusBtn.classList.toggle('active', soloInstance === i));
   }
 
+  // --- Split / Layout logic ---
+  const inst1El = document.getElementById('inst1');
+  const inst2El = document.getElementById('inst2');
+  const divider = document.getElementById('divider');
+  const splitSlider = document.getElementById('splitSlider');
+  const toggleLayoutBtn = document.getElementById('toggleLayout');
+  let isVertical = false;
+
+  function applySplit(value) {
+    const pct = value / 100;
+    if (isVertical) {
+      inst1El.style.flex = 'none';
+      inst2El.style.flex = 'none';
+      inst1El.style.width = '100%';
+      inst2El.style.width = '100%';
+      inst1El.style.height = `calc(${pct * 100}% - 2.5px)`;
+      inst2El.style.height = `calc(${(1 - pct) * 100}% - 2.5px)`;
+    } else {
+      inst1El.style.flex = 'none';
+      inst2El.style.flex = 'none';
+      inst1El.style.height = '100%';
+      inst2El.style.height = '100%';
+      inst1El.style.width = `calc(${pct * 100}% - 2.5px)`;
+      inst2El.style.width = `calc(${(1 - pct) * 100}% - 2.5px)`;
+    }
+  }
+
+  function resetSplit() {
+    splitSlider.value = 50;
+    applySplit(50);
+  }
+
+  splitSlider.addEventListener('input', () => applySplit(parseInt(splitSlider.value)));
+
+  toggleLayoutBtn.onclick = () => {
+    isVertical = !isVertical;
+    document.body.classList.toggle('layout-vertical', isVertical);
+    document.body.classList.toggle('layout-horizontal', !isVertical);
+    toggleLayoutBtn.textContent = isVertical ? '↔' : '↕';
+    resetSplit();
+  };
+
+  // Divider drag
+  let dividerDragging = false;
+  divider.addEventListener('mousedown', e => { dividerDragging = true; divider.classList.add('dragging'); e.preventDefault(); });
+  window.addEventListener('mousemove', e => {
+    if (!dividerDragging) return;
+    const rect = document.body.getBoundingClientRect();
+    let pct;
+    if (isVertical) {
+      pct = Math.min(90, Math.max(10, ((e.clientY - rect.top) / rect.height) * 100));
+    } else {
+      pct = Math.min(90, Math.max(10, ((e.clientX - rect.left) / rect.width) * 100));
+    }
+    splitSlider.value = pct;
+    applySplit(pct);
+  });
+  window.addEventListener('mouseup', () => { dividerDragging = false; divider.classList.remove('dragging'); });
+
+  // --- Dual toggle ---
   const dualBtn = document.getElementById('toggleDual');
   let isDual = false;
 
@@ -263,9 +381,15 @@
     isDual = !isDual;
     dualBtn.classList.toggle('active', isDual);
     document.body.classList.toggle('dual-active', isDual);
-    document.getElementById('inst2').classList.toggle('hidden', !isDual);
-    if (!isDual) soloInstance = null; // Reset solo mode if going back to single
-    if (isDual && instances[1].state.index === -1) instances[1].navigateForward();
+    inst2El.classList.toggle('hidden', !isDual);
+    if (!isDual) {
+      soloInstance = null;
+      inst1El.style.cssText = '';
+      inst2El.style.cssText = '';
+    } else {
+      resetSplit();
+      if (instances[1].state.index === -1) instances[1].navigateForward();
+    }
     updateFocusUI();
   };
 
@@ -276,7 +400,6 @@
     const k = e.key.toLowerCase();
     instances.forEach((inst, idx) => {
         const isVisible = idx === 0 || isDual;
-        // Hotkey logic: Only run if visible AND (no solo instance exists OR this is the solo instance)
         const canControl = isVisible && (soloInstance === null || soloInstance === inst);
         
         if (canControl) {
